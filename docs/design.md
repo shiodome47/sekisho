@@ -21,7 +21,7 @@
 | 関所 | `Gate` | チェック項目のまとまり。全部済んだらクリア |
 | チェック項目 | `CheckItem` | 1 つのやること。中身（動画・区間・文字など）は部品は知らない |
 | 進み具合 | `Progress` | その人が、どの項目にチェックを入れたか |
-| クリアの記録 | `GateClear` | その人が、どの関所をいつクリアしたか |
+| クリアの記録 | `Clear` | その人が、どの関所（とコース）をいつクリアしたか |
 | ご褒美 | `Reward` | クリアしたときの演出。コネクタ（差込口）でつなぐ |
 
 ## 決まったこと
@@ -105,12 +105,12 @@ interface ItemProgress {
   updatedAt: string
 }
 
-/** クリアの記録（1 人・1 関所につき 1 件） */
-interface GateClear {
-  /** `${courseId}|${gateId}` */
+/** クリアの記録（1 人・1 関所につき 1 件。gateId が無いものはコースを全部クリアした記録） */
+interface Clear {
+  /** `${courseId}|${gateId}`、コースは `${courseId}|*` */
   id: string
   courseId: string
-  gateId: string
+  gateId?: string
   clearedAt: string
 }
 ```
@@ -125,7 +125,7 @@ interface GateClear {
 
 - チェックは **1 回きり**。一度済んだら、日付が変わっても外れない
 - まちがえたときは、**自分で外せる**（回数のある項目は 1 つ戻せる）
-- 関所の**クリアは消えない**。項目を外しても、クリアの記録（`GateClear`）は残す。
+- 関所の**クリアは消えない**。項目を外しても、クリアの記録（`Clear`）は残す。
   もう一度全部そろっても、演出は 2 回目は出さない
 - 「毎日やり直す項目」は今は入れない。あとで足せるように `repeat` の場所だけ空けておく
 
@@ -235,7 +235,7 @@ interface Activity {
 
 /** 知らせを受けて、進み具合の変更を返す（データは書き換えない。保存はアプリ） */
 function report(data: SekishoData, activity: Activity, now: Date): Changes
-// Changes には、進んだ項目（ItemProgress）と、新しくクリアした関所（GateClear）が入る。
+// Changes には、進んだ項目（ItemProgress）と、新しくクリアした関所（Clear）が入る。
 // 新しいクリアがあれば、画面の部品がスタンプとご褒美を出す
 ```
 
@@ -299,7 +299,7 @@ interface TargetAdapter {
 
 ## これからの進め方
 
-1. **部品の土台**（画面なし）: データの形・計算（チェック・回数・クリア・関所が開くか・`report`・書き出しと読み込み）・テスト
+1. ✅ **部品の土台**（画面なし。`@shiodome47/sekisho/core`）: データの形・計算（チェック・回数・クリア・関所が開くか・`report`・書き出しと読み込み）・テスト
 2. **画面と演出**: 回る画面・通行手形のスタンプ・ご褒美のコネクタ（`message`）・作る画面（`/editor`。`<CardBoard>`）。
    ライト・ダーク、演出を減らす設定、音を消す設定
 3. **見本のページ**（Vercel）と README・`PUBLISHING.md`

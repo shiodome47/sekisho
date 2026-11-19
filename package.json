@@ -1,0 +1,49 @@
+{
+  "name": "@shiodome47/sekisho",
+  "version": "0.0.0",
+  "description": "関所めぐり: チェックリストをクリアしていくと、通行手形にスタンプが押される部品。コース・関所・チェック項目・ご褒美のコネクタ",
+  "keywords": [
+    "gamification",
+    "checklist",
+    "progress",
+    "stamp",
+    "rewards",
+    "learning"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shiodome47/sekisho.git"
+  },
+  "homepage": "https://github.com/shiodome47/sekisho#readme",
+  "bugs": "https://github.com/shiodome47/sekisho/issues",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    "./core": {
+      "types": "./dist/core/index.d.ts",
+      "import": "./dist/core/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "prepack": "npm run build",
+    "prepublishOnly": "npm run typecheck && npm test"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "tsup": "^9.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "^5.1.1"
+  }
+}
