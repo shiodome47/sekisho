@@ -216,6 +216,7 @@ interface RewardConnector {
 ```
 
 - 部品に入れるコネクタ: `message`（ひみつの一言を出す）
+- スタンプの演出そのものも `renderStamp` で差し替えられる（英語アプリでメダルにする、など）
 - 手話アプリが足すコネクタ: `video`（先生の「おめでとう」の手話動画を出す）
 - 知らない `type` のご褒美は飛ばす（古い版のアプリでも止まらない）
 - **演出を減らす設定**（端末の prefers-reduced-motion か、アプリの設定）: スタンプは動かさずに表示だけ。
@@ -300,8 +301,8 @@ interface TargetAdapter {
 ## これからの進め方
 
 1. ✅ **部品の土台**（画面なし。`@shiodome47/sekisho/core`）: データの形・計算（チェック・回数・クリア・関所が開くか・`report`・書き出しと読み込み）・テスト
-2. **画面と演出**: 回る画面・通行手形のスタンプ・ご褒美のコネクタ（`message`）・作る画面（`/editor`。`<CardBoard>`）。
+2. ✅ **画面と演出**: 回る画面・通行手形のスタンプ・ご褒美のコネクタ（`message`）・作る画面（`/editor`。`<CardBoard>`）。
    ライト・ダーク、演出を減らす設定、音を消す設定
-3. **見本のページ**（Vercel）と README・`PUBLISHING.md`
+3. 🔶 **見本のページ**（`examples/web` はできた。Vercel への設置は依頼者）と README・`PUBLISHING.md`
 4. **手話アプリに入れる PR**（隠しページ・ShuwaDB の表・同期・バックアップ・自動のチェック・`video` のご褒美）
 5. npm への公開（依頼者）→ catalog の `CATALOG.md` と `map.html` を直す PR

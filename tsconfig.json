@@ -13,7 +13,12 @@
     "isolatedModules": true,
     "resolveJsonModule": true,
     "noEmit": true,
-    "types": ["node"]
+    "types": ["node", "vitest/globals", "vite/client"],
+    "paths": {
+      "@shiodome47/sekisho": ["./src/ui/index.ts"],
+      "@shiodome47/sekisho/core": ["./src/core/index.ts"],
+      "@shiodome47/sekisho/editor": ["./src/editor/index.ts"]
+    }
   },
-  "include": ["src", "vitest.config.ts", "tsup.config.ts"]
+  "include": ["src", "examples/web/src", "examples/web/vite.config.ts", "vitest.config.ts", "vitest.setup.ts", "tsup.config.ts"]
 }
