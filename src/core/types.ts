@@ -49,6 +49,8 @@ export interface Gate {
   reward?: RewardRef
   /** 点数。今は使わない（あとで足す場所） */
   points?: number
+  /** 作る画面（カードのボード）で置いた列と、列の中の順番。回る画面では使わない */
+  board?: { column?: number; order: number }
 }
 
 /** 回り方。'free' どこからでも（既定）／'ordered' 順番（前の関所をクリアすると次が開く） */

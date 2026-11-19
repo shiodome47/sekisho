@@ -87,7 +87,10 @@ function readGate(v: unknown, seenGates: Set<string>, seenItems: Set<string>, er
     ? { ...(text(v.stamp.text) ? { text: text(v.stamp.text) } : {}), ...(text(v.stamp.color) ? { color: text(v.stamp.color) } : {}) }
     : undefined
   const points = Number(v.points)
-  const { id: _i, title: _t, description: _d, items: _it, stamp: _s, reward: _r, points: _p, ...rest } = v
+  const order = isObj(v.board) ? Number(v.board.order) : NaN
+  const column = isObj(v.board) ? Number(v.board.column) : NaN
+  const board = Number.isFinite(order) ? { order, ...(Number.isInteger(column) && column >= 0 ? { column } : {}) } : undefined
+  const { id: _i, title: _t, description: _d, items: _it, stamp: _s, reward: _r, points: _p, board: _b, ...rest } = v
   return {
     ...rest,
     id: gateId,
@@ -97,6 +100,7 @@ function readGate(v: unknown, seenGates: Set<string>, seenItems: Set<string>, er
     ...(stamp && Object.keys(stamp).length > 0 ? { stamp } : {}),
     ...(reward ? { reward } : {}),
     ...(Number.isFinite(points) && v.points !== undefined ? { points } : {}),
+    ...(board ? { board } : {}),
   }
 }
 

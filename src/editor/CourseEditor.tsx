@@ -1,0 +1,300 @@
+import { CardBoard, flattenCards, type CardBoardCardState, type CardPlace } from 'linkshelf'
+import { useMemo, useState } from 'react'
+import { newGate, newItem } from '../core/course'
+import type { CheckItem, Course, Gate } from '../core/types'
+import { stampOf, type TargetAdapter } from '../ui/connectors'
+import { JA_LABELS } from '../ui/labels'
+import type { CourseEditorProps } from '../ui/Sekisho'
+import { Stamp } from '../ui/Stamp'
+
+export type { CourseEditorProps }
+
+const MAX_COUNT = 999
+
+/**
+ * コースを作る・直す画面。自分のコースにも、管理者が配るコースにも使う。
+ * 関所はカードにして段組みで並べ、ドラッグで動かす（linkshelf の <CardBoard>）。
+ * 保存するまでは、手元の下書きだけを変える
+ */
+export function CourseEditor({ course, onSave, onCancel, targets, labels: labelsPatch }: CourseEditorProps) {
+  const labels = useMemo(() => ({ ...JA_LABELS, ...labelsPatch }), [labelsPatch])
+  const [draft, setDraft] = useState<Course>(course)
+  const setGates = (fn: (gates: Gate[]) => Gate[]) => setDraft((d) => ({ ...d, gates: fn(d.gates) }))
+  const setGate = (gateId: string, fn: (g: Gate) => Gate) => setGates((gs) => gs.map((g) => (g.id === gateId ? fn(g) : g)))
+
+  const cards = draft.gates.map((g, i) => ({ ...g, order: g.board?.order ?? i, column: g.board?.column, size: g.items.length + 4 }))
+
+  const onMove = (places: CardPlace[]) => {
+    const byId = new Map(places.map((p) => [p.id, p]))
+    const placed = cards.map((c) => {
+      const p = byId.get(c.id)
+      return p ? { ...c, order: p.order, column: p.column } : c
+    })
+    // 左上から読む順を、回る順（関所の並び）にする
+    const order = flattenCards(placed).map((c) => c.id)
+    setGates((gs) =>
+      order
+        .map((id) => gs.find((g) => g.id === id)!)
+        .map((g) => {
+          const p = byId.get(g.id)
+          return p ? { ...g, board: { order: p.order, ...(p.column !== undefined ? { column: p.column } : {}) } } : g
+        }),
+    )
+  }
+
+  const addGate = () => setGates((gs) => [...gs, newGate({ title: labels.newGateTitle(gs.length + 1) })])
+
+  const save = () => {
+    const at = new Date().toISOString()
+    onSave({
+      ...draft,
+      title: draft.title.trim() || labels.untitled,
+      description: draft.description?.trim() || undefined,
+      gates: draft.gates.map((g) => ({ ...g, title: g.title.trim() || labels.gateTitle, items: g.items.filter((i) => i.title.trim()) })),
+      revision: course.revision + 1,
+      updatedAt: at,
+    })
+  }
+
+  const route = draft.route ?? 'free'
+  return (
+    <div className="sk-editor">
+      <div className="sk-toolbar">
+        <button type="button" className="sk-btn sk-btn--ghost" onClick={onCancel}>
+          {labels.cancel}
+        </button>
+        <button type="button" className="sk-btn sk-btn--primary" onClick={save}>
+          {labels.save}
+        </button>
+      </div>
+
+      <div className="sk-card sk-editor__course">
+        <label className="sk-field">
+          <span className="sk-field__label">{labels.courseTitle}</span>
+          <input className="sk-input" value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} autoFocus={!course.title} />
+        </label>
+        <label className="sk-field">
+          <span className="sk-field__label">{labels.courseDescription}</span>
+          <textarea className="sk-input" rows={2} value={draft.description ?? ''} onChange={(e) => setDraft({ ...draft, description: e.target.value })} />
+        </label>
+        <div className="sk-field">
+          <span className="sk-field__label">{labels.route}</span>
+          <div className="sk-segmented" role="radiogroup" aria-label={labels.route}>
+            {(['free', 'ordered'] as const).map((r) => (
+              <button
+                key={r}
+                type="button"
+                role="radio"
+                aria-checked={route === r}
+                className={route === r ? 'is-on' : ''}
+                onClick={() => setDraft({ ...draft, route: r })}
+              >
+                {r === 'free' ? labels.routeFree : labels.routeOrdered}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <CardBoard
+        cards={cards}
+        onMove={onMove}
+        minColumnWidth={320}
+        gap={12}
+        addon={
+          <button type="button" className="sk-btn sk-add-gate" onClick={addGate}>
+            ＋ {labels.addGate}
+          </button>
+        }
+        renderCard={(card, { dragHandle, isDragging }) => {
+          const gate = draft.gates.find((g) => g.id === card.id)!
+          const index = draft.gates.indexOf(gate)
+          return (
+            <GateEditor
+              gate={gate}
+              index={index}
+              color={draft.color}
+              labels={labels}
+              dragHandle={dragHandle}
+              isDragging={isDragging}
+              canPick={!!targets?.pick}
+              onPick={async () => {
+                const picked = await targets!.pick!()
+                if (picked) setGate(gate.id, (g) => ({ ...g, items: [...g.items, newItem({ title: picked.title, target: picked.target })] }))
+              }}
+              renderBadge={targets?.renderBadge}
+              onChange={(fn) => setGate(gate.id, fn)}
+              onRemove={() => {
+                if (gate.items.length === 0 || window.confirm(labels.removeGateConfirm(gate.title))) setGates((gs) => gs.filter((g) => g.id !== gate.id))
+              }}
+            />
+          )
+        }}
+      />
+    </div>
+  )
+}
+
+type L = typeof JA_LABELS
+
+function GateEditor({
+  gate,
+  index,
+  color,
+  labels,
+  dragHandle,
+  isDragging,
+  canPick,
+  onPick,
+  renderBadge,
+  onChange,
+  onRemove,
+}: {
+  gate: Gate
+  index: number
+  color?: string
+  labels: L
+  dragHandle: CardBoardCardState['dragHandle']
+  isDragging: boolean
+  canPick: boolean
+  onPick: () => void
+  renderBadge?: TargetAdapter['renderBadge']
+  onChange: (fn: (g: Gate) => Gate) => void
+  onRemove: () => void
+}) {
+  const [text, setText] = useState('')
+  const s = stampOf(gate, color)
+  const setItem = (itemId: string, patch: Partial<CheckItem>) =>
+    onChange((g) => ({ ...g, items: g.items.map((i) => (i.id === itemId ? { ...i, ...patch } : i)) }))
+  const moveItem = (from: number, to: number) =>
+    onChange((g) => {
+      if (to < 0 || to >= g.items.length) return g
+      const items = g.items.slice()
+      const [x] = items.splice(from, 1)
+      items.splice(to, 0, x)
+      return { ...g, items }
+    })
+  const addText = () => {
+    const title = text.trim()
+    if (!title) return
+    // 「10 回」「×10」「x10」が文にあれば、回数にする
+    const m = title.match(/(\d{1,3})\s*(回|times|x)|[×x]\s*(\d{1,3})/i)
+    const count = m ? Number(m[1] ?? m[3]) : undefined
+    onChange((g) => ({ ...g, items: [...g.items, newItem({ title, count })] }))
+    setText('')
+  }
+  const message = gate.reward?.type === 'message' ? String(gate.reward.text ?? '') : ''
+  return (
+    <section className="sk-card sk-gate-editor" style={{ opacity: isDragging ? 0.5 : 1 }}>
+      <div className="sk-gate-editor__head">
+        <button type="button" className="sk-handle" aria-label={labels.moveGate(gate.title)} {...dragHandle}>
+          ⋮⋮
+        </button>
+        <span className="sk-gate-editor__number">{labels.gateNumber(index + 1)}</span>
+        <button type="button" className="sk-icon-btn sk-icon-btn--danger" aria-label={labels.removeGate} title={labels.removeGate} onClick={onRemove}>
+          ×
+        </button>
+      </div>
+      <div className="sk-gate-editor__title">
+        <Stamp text={s.text} color={s.color} size={44} />
+        <label className="sk-field sk-grow">
+          <span className="sk-field__label">{labels.gateTitle}</span>
+          <input className="sk-input" value={gate.title} onChange={(e) => onChange((g) => ({ ...g, title: e.target.value }))} />
+        </label>
+        <label className="sk-field sk-field--narrow">
+          <span className="sk-field__label">{labels.stampText}</span>
+          <input
+            className="sk-input"
+            value={gate.stamp?.text ?? ''}
+            placeholder={[...gate.title.trim()][0] ?? ''}
+            title="1〜2 文字"
+            maxLength={4}
+            onChange={(e) => onChange((g) => ({ ...g, stamp: { ...g.stamp, text: [...e.target.value].slice(0, 2).join('') } }))}
+          />
+        </label>
+      </div>
+
+      <ul className="sk-edit-items">
+        {gate.items.map((item, i) => (
+          <li key={item.id} className="sk-edit-item">
+            {item.target && renderBadge ? <span className="sk-item__badge">{renderBadge(item.target, item)}</span> : null}
+            <input className="sk-input sk-grow" aria-label={labels.itemTitle} value={item.title} onChange={(e) => setItem(item.id, { title: e.target.value })} />
+            <span className="sk-edit-item__tools">
+            <label className="sk-count-field">
+              <input
+                className="sk-input"
+                type="number"
+                min={1}
+                max={MAX_COUNT}
+                aria-label={labels.itemCount}
+                value={item.count ?? 1}
+                onChange={(e) => {
+                  const n = Math.max(1, Math.min(MAX_COUNT, Math.floor(Number(e.target.value) || 1)))
+                  setItem(item.id, { count: n > 1 ? n : undefined })
+                }}
+              />
+              <span>{labels.itemCount}</span>
+            </label>
+            <span className="sk-edit-item__moves">
+              <button type="button" className="sk-icon-btn" aria-label={labels.moveUp(item.title)} disabled={i === 0} onClick={() => moveItem(i, i - 1)}>
+                ↑
+              </button>
+              <button type="button" className="sk-icon-btn" aria-label={labels.moveDown(item.title)} disabled={i === gate.items.length - 1} onClick={() => moveItem(i, i + 1)}>
+                ↓
+              </button>
+              <button
+                type="button"
+                className="sk-icon-btn sk-icon-btn--danger"
+                aria-label={labels.removeItem(item.title)}
+                onClick={() => onChange((g) => ({ ...g, items: g.items.filter((x) => x.id !== item.id) }))}
+              >
+                ×
+              </button>
+            </span>
+            </span>
+          </li>
+        ))}
+      </ul>
+
+      <form
+        className="sk-add-item"
+        onSubmit={(e) => {
+          e.preventDefault()
+          addText()
+        }}
+      >
+        <input className="sk-input sk-grow" aria-label={labels.addItem} placeholder={labels.addItemPlaceholder} value={text} onChange={(e) => setText(e.target.value)} />
+        <button type="submit" className="sk-btn" disabled={!text.trim()}>
+          {labels.addItem}
+        </button>
+      </form>
+      {canPick ? (
+        <button type="button" className="sk-btn sk-btn--ghost sk-pick" onClick={onPick}>
+          ＋ {labels.pickTarget}
+        </button>
+      ) : null}
+
+      {gate.reward && gate.reward.type !== 'message' ? (
+        <p className="sk-reward-chip">
+          {labels.rewardOther(gate.reward.type)}
+          <button type="button" className="sk-icon-btn sk-icon-btn--danger" aria-label={labels.removeReward} onClick={() => onChange(({ reward: _r, ...g }) => g)}>
+            ×
+          </button>
+        </p>
+      ) : (
+        <label className="sk-field">
+          <span className="sk-field__label">{labels.rewardMessage}</span>
+          <textarea
+            className="sk-input"
+            rows={2}
+            value={message}
+            onChange={(e) => {
+              const t = e.target.value
+              onChange(({ reward: _r, ...g }) => (t ? { ...g, reward: { type: 'message', text: t } } : g))
+            }}
+          />
+        </label>
+      )}
+    </section>
+  )
+}
