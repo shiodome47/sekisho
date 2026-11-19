@@ -5,7 +5,9 @@ import {
   addOne,
   applyChanges,
   deleteCourse,
+  nextLap,
   removeOne,
+  restartCourse,
   settleClears,
   toggleItem,
   viewCourse,
@@ -137,6 +139,14 @@ export function Sekisho(props: SekishoProps) {
             : undefined
         }
         onExport={allowExport ? () => download(current) : undefined}
+        onNextLap={() => {
+          if (!window.confirm(labels.nextLapConfirm(viewCourse(data, current).lap))) return
+          change(nextLap(data, current.id, now()))
+        }}
+        onRestart={() => {
+          if (!window.confirm(labels.restartConfirm)) return
+          change(restartCourse(data, current.id, now()))
+        }}
         onDelete={() => {
           if (!window.confirm(labels.deleteConfirm(current.title))) return
           change(deleteCourse(data, current.id))
@@ -271,6 +281,7 @@ function CourseList({
                 <span style={{ width: `${v.total ? (v.cleared / v.total) * 100 : 0}%` }} />
               </span>
               <span className="sk-card__meta">
+                {v.lap > 1 ? `${labels.lapNumber(v.lap)} ・ ` : ''}
                 {labels.clearedOf(v.cleared, v.total)}
                 {v.complete ? ` ・ ${labels.courseCleared}` : ''}
               </span>
@@ -308,6 +319,8 @@ function CoursePage({
   onEdit,
   onDuplicate,
   onExport,
+  onNextLap,
+  onRestart,
   onDelete,
 }: {
   view: CourseView
@@ -321,9 +334,12 @@ function CoursePage({
   onEdit?: () => void
   onDuplicate?: () => void
   onExport?: () => void
+  onNextLap: () => void
+  onRestart: () => void
   onDelete: () => void
 }) {
   const { course } = view
+  const hasHistory = view.started || view.laps.length > 0
   return (
     <div className="sk-course">
       <div className="sk-toolbar">
@@ -355,6 +371,7 @@ function CoursePage({
         <p className="sk-course__meta">
           <span className="sk-tag">{course.origin === 'given' ? labels.given : labels.own}</span>
           <span className="sk-tag">{(course.route ?? 'free') === 'ordered' ? labels.routeOrdered : labels.routeFree}</span>
+          {view.lap > 1 ? <span className="sk-tag sk-tag--lap">{labels.lapNumber(view.lap)}</span> : null}
           <span>{labels.clearedOf(view.cleared, view.total)}</span>
           {view.complete ? <span className="sk-tag sk-tag--done">{labels.courseCleared}</span> : null}
         </p>
@@ -400,7 +417,31 @@ function CoursePage({
         ))}
       </ol>
 
+      {view.laps.length > 0 ? (
+        <section className="sk-laps" aria-label={labels.laps}>
+          <h3 className="sk-laps__title">{labels.laps}</h3>
+          <ol className="sk-laps__list">
+            {view.laps.map((l, i) => (
+              <li key={l.id}>
+                <span className="sk-laps__n">{labels.lapNumber(i + 1)}</span>
+                <span>{labels.lapDate(l.endedAt)}</span>
+                <span>{labels.clearedOf(l.cleared, l.total)}</span>
+                {l.complete ? <span className="sk-tag sk-tag--done">{labels.courseCleared}</span> : null}
+              </li>
+            ))}
+          </ol>
+        </section>
+      ) : null}
+
       <div className="sk-danger-zone">
+        <div className="sk-lap-actions">
+          <button type="button" className="sk-btn" onClick={onNextLap} disabled={!view.started} title={labels.nextLapHint}>
+            {labels.nextLap}
+          </button>
+          <button type="button" className="sk-btn sk-btn--danger" onClick={onRestart} disabled={!hasHistory}>
+            {labels.restartCourse}
+          </button>
+        </div>
         <button type="button" className="sk-btn sk-btn--danger" onClick={onDelete}>
           {labels.deleteCourse}
         </button>

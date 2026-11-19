@@ -30,7 +30,7 @@ import { CourseEditor } from '@shiodome47/sekisho/editor' // 作る画面が要�
 import '@shiodome47/sekisho/style.css'
 
 <Sekisho
-  data={data} // { courses, progress, clears }
+  data={data} // { courses, progress, clears, laps }
   onChange={(changes) => {
     myStorage.save(changes) // 保存はアプリ
     setData((d) => applyChanges(d, changes))
@@ -96,7 +96,7 @@ React にも保存先にも頼らない、計算だけの入り口です。
 ```ts
 import { addOne, applyChanges, report, viewCourse, type SekishoData } from '@shiodome47/sekisho/core'
 
-let data: SekishoData = await myStorage.load() // { courses, progress, clears }
+let data: SekishoData = await myStorage.load() // { courses, progress, clears, laps }
 
 // 自分で「＋1」を押した
 const changes = addOne(data, courseId, itemId, new Date())
@@ -114,7 +114,8 @@ const view = viewCourse(data, data.courses[0])
 | 種類 | 関数 |
 |---|---|
 | 進める・戻す | `addOne`（＋1）・`removeOne`（−1）・`checkItem`（済みにする）・`uncheckItem`（外す）・`toggleItem`・`report`（自動のチェック） |
-| 見る | `viewCourse`・`isGateOpen`・`itemGoal` |
+| 周回 | `nextLap`（もう一周する）・`restartCourse`（はじめからやり直す） |
+| 見る | `viewCourse`（何周目か・周回の記録も）・`isGateOpen`・`itemGoal`・`currentLap` |
 | コースを作る・直す | `newCourse`・`newGate`・`newItem`・`updateCourse`・`addGate`・`updateGate`・`removeGate`・`moveGate`・`addItem`・`updateItem`・`removeItem`・`moveItem`・`duplicateCourse` |
 | 配る・受け取る | `exportCourses`（JSON にする）・`parseCourses`（形を確かめて読む）・`importCourses`（新しい版だけ取り込む） |
 | 保存・同期 | `applyChanges`・`deleteCourse`・`settleClears`・`newerProgress` |
@@ -122,7 +123,8 @@ const view = viewCourse(data, data.courses[0])
 決まりごと:
 
 - チェックは 1 回きり（日付が変わっても外れない）。自分で外せる
-- 関所のクリアの記録は消えない。項目を外しても残り、演出は 2 回目は出ない
+- 関所のクリアの記録は消えない。項目を外しても残り、演出は 2 回目は出ない（その周の中では）
+- やり直すときは、使う人が選ぶ: **もう一周する**（`nextLap`。今の周を周回の記録 `laps` に残し、空の通行手形で次の周へ）か、**はじめからやり直す**（`restartCourse`。周回の記録も消して 1 周目へ）
 - 順番のコースでは、開いていない関所の項目は進まない
 - 進み具合はチェック項目の `id` で結びつく。コースが新しい版になっても残る
 
