@@ -1,14 +1,20 @@
 /**
  * 進み具合の計算（画面なし）。
  * 関数はデータを書き換えず、変更（Changes）を返す。保存はアプリがして、applyChanges で手元にも当てる。
+ *
+ * 周回: 進み具合とクリアの記録は「何周目のものか」（round）を持ち、今の周のものだけを数える。
+ * 「もう一周する」（nextLap）で周回の記録（Lap）を残して次の周へ、「はじめからやり直す」（restartCourse）で 1 周目に戻る。
  */
-import type { Activity, Changes, CheckItem, Clear, ClearEvent, Course, Gate, ItemProgress, SekishoData, TargetRef } from './types'
+import type { Activity, Changes, CheckItem, Clear, ClearEvent, Course, Gate, ItemProgress, Lap, SekishoData, TargetRef } from './types'
 
 /** 進み具合の id */
 export const progressId = (courseId: string, itemId: string) => `${courseId}|${itemId}`
 
 /** クリアの記録の id。gateId が無ければコースを全部クリアした記録 */
 export const clearId = (courseId: string, gateId?: string) => `${courseId}|${gateId ?? '*'}`
+
+/** 周回の記録の id */
+export const lapId = (courseId: string, round: number) => `${courseId}|${round}`
 
 /** 項目の回数（無ければ 1。1 より小さい・数でないものも 1） */
 export function itemGoal(item: Pick<CheckItem, 'count'>): number {
@@ -37,7 +43,7 @@ export interface GateView {
   total: number
   /** 今、項目が全部済んでいるか */
   complete: boolean
-  /** クリアの記録があるか（一度クリアしたら、項目を外しても true のまま） */
+  /** この周でクリアの記録があるか（一度クリアしたら、項目を外しても true のまま） */
   cleared: boolean
   clearedAt?: string
   /** 開いているか（順番のコースでは、前の関所をクリアすると開く） */
@@ -47,49 +53,87 @@ export interface GateView {
 export interface CourseView {
   course: Course
   gates: GateView[]
-  /** クリアした関所の数 */
+  /** この周でクリアした関所の数 */
   cleared: number
   /** 関所の数 */
   total: number
-  /** コースを全部クリアした記録があるか */
+  /** この周でコースを全部クリアした記録があるか */
   complete: boolean
   clearedAt?: string
+  /** 何周目か（画面に出す番号。はじめからやり直すと 1 に戻る） */
+  lap: number
+  /** これまでの周回の記録（古い順。隠したものは入れない） */
+  laps: Lap[]
+  /** この周で、何か進めたか（チェック・回数・クリアのどれか） */
+  started: boolean
 }
 
-type ProgressMap = Map<string, ItemProgress>
-type ClearMap = Map<string, Clear>
+/** 計算のための入れ物（id から引けるようにしたもの） */
+interface Ctx {
+  progress: Map<string, ItemProgress>
+  clears: Map<string, Clear>
+  laps: Lap[]
+  rounds: Map<string, number>
+}
 
-const progressMap = (data: Pick<SekishoData, 'progress'>): ProgressMap => new Map(data.progress.map((p) => [p.id, p]))
-const clearMap = (data: Pick<SekishoData, 'clears'>): ClearMap => new Map(data.clears.map((c) => [c.id, c]))
+function makeCtx(data: Partial<SekishoData>): Ctx {
+  const laps = data.laps ?? []
+  const rounds = new Map<string, number>()
+  for (const l of laps) rounds.set(l.courseId, Math.max(rounds.get(l.courseId) ?? 0, l.round))
+  return {
+    progress: new Map((data.progress ?? []).map((p) => [p.id, p])),
+    clears: new Map((data.clears ?? []).map((c) => [c.id, c])),
+    laps,
+    rounds,
+  }
+}
 
-function doneOf(progress: ProgressMap, courseId: string, item: CheckItem): number {
-  const n = progress.get(progressId(courseId, item.id))?.done ?? 0
+/** 今が何周目か（中の番号。終えた周のいちばん大きい番号 + 1） */
+const roundOf = (ctx: Ctx, courseId: string) => (ctx.rounds.get(courseId) ?? 0) + 1
+const sameRound = (r: { round?: number } | undefined, round: number) => !!r && (r.round ?? 1) === round
+
+/** 今の周のクリアの記録 */
+function clearIn(ctx: Ctx, courseId: string, gateId: string | undefined, round: number): Clear | undefined {
+  const c = ctx.clears.get(clearId(courseId, gateId))
+  return sameRound(c, round) ? c : undefined
+}
+
+function doneOf(ctx: Ctx, courseId: string, item: CheckItem, round: number): number {
+  const p = ctx.progress.get(progressId(courseId, item.id))
+  const n = sameRound(p, round) ? p!.done : 0
   return Math.max(0, Math.min(itemGoal(item), n))
 }
 
-function openAt(course: Course, clears: ClearMap, index: number): boolean {
+function openAt(ctx: Ctx, course: Course, index: number, round: number): boolean {
   if ((course.route ?? 'free') === 'free' || index <= 0) return true
   const gate = course.gates[index]
   const prev = course.gates[index - 1]
   // 前の関所をクリアしていれば開く。もうクリアした関所は、前に関所が足されても開いたまま
-  return clears.has(clearId(course.id, prev.id)) || (!!gate && clears.has(clearId(course.id, gate.id)))
+  return !!clearIn(ctx, course.id, prev.id, round) || (!!gate && !!clearIn(ctx, course.id, gate.id, round))
+}
+
+/** 今が何周目か（画面に出す番号） */
+export function currentLap(data: Pick<SekishoData, 'laps'>, courseId: string): number {
+  return (data.laps ?? []).filter((l) => l.courseId === courseId && !l.hidden).length + 1
 }
 
 /** 関所が開いているか */
-export function isGateOpen(data: Pick<SekishoData, 'clears'>, course: Course, gateId: string): boolean {
+export function isGateOpen(data: Pick<SekishoData, 'clears'> & Partial<SekishoData>, course: Course, gateId: string): boolean {
   const index = course.gates.findIndex((g) => g.id === gateId)
-  return index >= 0 && openAt(course, clearMap(data), index)
+  const ctx = makeCtx(data)
+  return index >= 0 && openAt(ctx, course, index, roundOf(ctx, course.id))
 }
 
-function viewWith(progress: ProgressMap, clears: ClearMap, course: Course): CourseView {
+function viewWith(ctx: Ctx, course: Course): CourseView {
+  const round = roundOf(ctx, course.id)
   const gates = course.gates.map((gate, index): GateView => {
     const items = gate.items.map((item): ItemView => {
       const goal = itemGoal(item)
-      const done = doneOf(progress, course.id, item)
+      const done = doneOf(ctx, course.id, item, round)
       return { item, done, goal, complete: done >= goal }
     })
     const done = items.filter((i) => i.complete).length
-    const clear = clears.get(clearId(course.id, gate.id))
+    const clear = clearIn(ctx, course.id, gate.id, round)
     return {
       gate,
       index,
@@ -99,23 +143,28 @@ function viewWith(progress: ProgressMap, clears: ClearMap, course: Course): Cour
       complete: items.length > 0 && done === items.length,
       cleared: !!clear,
       ...(clear ? { clearedAt: clear.clearedAt } : {}),
-      open: openAt(course, clears, index),
+      open: openAt(ctx, course, index, round),
     }
   })
-  const courseClear = clears.get(clearId(course.id))
+  const courseClear = clearIn(ctx, course.id, undefined, round)
+  const laps = ctx.laps.filter((l) => l.courseId === course.id && !l.hidden).sort((a, b) => a.round - b.round)
+  const cleared = gates.filter((g) => g.cleared).length
   return {
     course,
     gates,
-    cleared: gates.filter((g) => g.cleared).length,
+    cleared,
     total: gates.length,
     complete: !!courseClear,
     ...(courseClear ? { clearedAt: courseClear.clearedAt } : {}),
+    lap: laps.length + 1,
+    laps,
+    started: cleared > 0 || gates.some((g) => g.items.some((i) => i.done > 0)),
   }
 }
 
-/** コースの進み具合（関所ごと・項目ごと）。画面はこれを描く */
+/** コースの進み具合（関所ごと・項目ごと・何周目か）。画面はこれを描く */
 export function viewCourse(data: SekishoData, course: Course): CourseView {
-  return viewWith(progressMap(data), clearMap(data), course)
+  return viewWith(makeCtx(data), course)
 }
 
 // ─── 進める・戻す ─────────────────────────────────────
@@ -134,28 +183,31 @@ function findItem(course: Course, itemId: string): { gateIndex: number; item: Ch
   return null
 }
 
+const withRound = <T extends object>(r: T, round: number): T & { round?: number } => (round > 1 ? { ...r, round } : r)
+
 /**
- * クリアの記録が無いのに項目が全部済んでいる関所を探して、記録と知らせを作る。
+ * この周でクリアの記録が無いのに項目が全部済んでいる関所を探して、記録と知らせを作る。
  * 関所を全部クリアしたコースには、コースの記録も作る
  */
-function detectClears(courses: Course[], progress: ProgressMap, clears: ClearMap, at: string): { clears: Clear[]; events: ClearEvent[] } {
+function detectClears(courses: Course[], ctx: Ctx, at: string): { clears: Clear[]; events: ClearEvent[] } {
   const added: Clear[] = []
   const events: ClearEvent[] = []
   for (const course of courses) {
-    const view = viewWith(progress, clears, course)
+    const round = roundOf(ctx, course.id)
+    const view = viewWith(ctx, course)
     let cleared = view.cleared
     for (const g of view.gates) {
       if (g.cleared || !g.complete) continue
-      const c: Clear = { id: clearId(course.id, g.gate.id), courseId: course.id, gateId: g.gate.id, clearedAt: at }
-      clears.set(c.id, c)
+      const c = withRound<Clear>({ id: clearId(course.id, g.gate.id), courseId: course.id, gateId: g.gate.id, clearedAt: at }, round)
+      ctx.clears.set(c.id, c)
       added.push(c)
       cleared++
       events.push({ kind: 'gate', course, gate: g.gate, cleared, total: view.total, at })
     }
-    const allCleared = course.gates.length > 0 && course.gates.every((g) => clears.has(clearId(course.id, g.id)))
-    if (allCleared && !clears.has(clearId(course.id))) {
-      const c: Clear = { id: clearId(course.id), courseId: course.id, clearedAt: at }
-      clears.set(c.id, c)
+    const allCleared = course.gates.length > 0 && course.gates.every((g) => clearIn(ctx, course.id, g.id, round))
+    if (allCleared && !clearIn(ctx, course.id, undefined, round)) {
+      const c = withRound<Clear>({ id: clearId(course.id), courseId: course.id, clearedAt: at }, round)
+      ctx.clears.set(c.id, c)
       added.push(c)
       events.push({ kind: 'course', course, cleared: view.total, total: view.total, at })
     }
@@ -165,41 +217,43 @@ function detectClears(courses: Course[], progress: ProgressMap, clears: ClearMap
 
 function applySteps(data: SekishoData, steps: Step[], now: Date): Changes {
   const at = now.toISOString()
-  const progress = progressMap(data)
-  const clears = clearMap(data)
+  const ctx = makeCtx(data)
   const courses = new Map(data.courses.map((c) => [c.id, c]))
   const changed = new Map<string, ItemProgress>()
   const touched = new Set<string>()
   for (const step of steps) {
     const course = courses.get(step.courseId)
     if (!course) continue
+    const round = roundOf(ctx, course.id)
     const found = findItem(course, step.itemId)
     // 順番のコースで、まだ開いていない関所の項目は進めない
-    if (!found || !openAt(course, clears, found.gateIndex)) continue
+    if (!found || !openAt(ctx, course, found.gateIndex, round)) continue
     const goal = itemGoal(found.item)
     const id = progressId(course.id, found.item.id)
-    const before = progress.get(id)
-    const done = doneOf(progress, course.id, found.item)
+    const before = ctx.progress.get(id)
+    const done = doneOf(ctx, course.id, found.item, round)
     const next = Math.max(0, Math.min(goal, Math.floor(step.next(done, goal))))
     if (next === done) continue
-    const wasComplete = done >= goal
-    const p: ItemProgress = {
-      id,
-      courseId: course.id,
-      itemId: found.item.id,
-      done: next,
-      ...(next >= goal ? { checkedAt: wasComplete && before?.checkedAt ? before.checkedAt : at } : {}),
-      updatedAt: at,
-    }
-    progress.set(id, p)
+    const keepCheckedAt = done >= goal && sameRound(before, round) ? before?.checkedAt : undefined
+    const p = withRound<ItemProgress>(
+      {
+        id,
+        courseId: course.id,
+        itemId: found.item.id,
+        done: next,
+        ...(next >= goal ? { checkedAt: keepCheckedAt ?? at } : {}),
+        updatedAt: at,
+      },
+      round,
+    )
+    ctx.progress.set(id, p)
     changed.set(id, p)
     touched.add(course.id)
   }
   if (changed.size === 0) return {}
   const found = detectClears(
     data.courses.filter((c) => touched.has(c.id)),
-    progress,
-    clears,
+    ctx,
     at,
   )
   return {
@@ -265,18 +319,67 @@ export function report(data: SekishoData, activity: Activity, now: Date): Change
 export function settleClears(data: SekishoData, now: Date, courseIds?: string[]): Changes {
   const only = courseIds ? new Set(courseIds) : null
   const courses = only ? data.courses.filter((c) => only.has(c.id)) : data.courses
-  const found = detectClears(courses, progressMap(data), clearMap(data), now.toISOString())
+  const found = detectClears(courses, makeCtx(data), now.toISOString())
   return found.clears.length > 0 ? { clears: found.clears, events: found.events } : {}
+}
+
+// ─── 周回 ─────────────────────────────────────
+
+/** そのコースの進み具合・クリアの記録の id（どの周のものも） */
+function courseRows(data: SekishoData, courseId: string) {
+  return {
+    progressIds: data.progress.filter((p) => p.courseId === courseId).map((p) => p.id),
+    clearIds: data.clears.filter((c) => c.courseId === courseId).map((c) => c.id),
+  }
+}
+
+/**
+ * もう一周する: 今の周を周回の記録に残し、チェックとスタンプを空にして次の周へ進む。
+ * 次の周でも、関所をクリアするとスタンプと演出がまた出る
+ */
+export function nextLap(data: SekishoData, courseId: string, now: Date): Changes {
+  const course = data.courses.find((c) => c.id === courseId)
+  if (!course) return {}
+  const ctx = makeCtx(data)
+  const round = roundOf(ctx, courseId)
+  const view = viewWith(ctx, course)
+  const lap: Lap = {
+    id: lapId(courseId, round),
+    courseId,
+    round,
+    endedAt: now.toISOString(),
+    cleared: view.cleared,
+    total: view.total,
+    complete: view.complete,
+  }
+  const rows = courseRows(data, courseId)
+  return { laps: [lap], deleteProgressIds: rows.progressIds, deleteClearIds: rows.clearIds }
+}
+
+/**
+ * はじめからやり直す: チェック・スタンプ・周回の記録を全部消して、1 周目に戻る（画面の番号）。
+ * 中の周の番号は進める（ほかの端末から古い周の記録が届いても、今の周に混ざらないように）
+ */
+export function restartCourse(data: SekishoData, courseId: string, now: Date): Changes {
+  if (!data.courses.some((c) => c.id === courseId)) return {}
+  const ctx = makeCtx(data)
+  const round = roundOf(ctx, courseId)
+  const hiddenLaps = ctx.laps.filter((l) => l.courseId === courseId && !l.hidden).map((l) => ({ ...l, hidden: true }))
+  const marker: Lap = { id: lapId(courseId, round), courseId, round, endedAt: now.toISOString(), cleared: 0, total: 0, complete: false, hidden: true }
+  const rows = courseRows(data, courseId)
+  return { laps: [...hiddenLaps, marker], deleteProgressIds: rows.progressIds, deleteClearIds: rows.clearIds }
 }
 
 // ─── 保存・同期のための道具 ─────────────────────────────────
 
-/** コースを消す（進み具合・クリアの記録も一緒に） */
+/** コースを消す（進み具合・クリアの記録・周回の記録も一緒に） */
 export function deleteCourse(data: SekishoData, courseId: string): Changes {
+  const rows = courseRows(data, courseId)
   return {
     deleteCourseIds: data.courses.some((c) => c.id === courseId) ? [courseId] : [],
-    deleteProgressIds: data.progress.filter((p) => p.courseId === courseId).map((p) => p.id),
-    deleteClearIds: data.clears.filter((c) => c.courseId === courseId).map((c) => c.id),
+    deleteProgressIds: rows.progressIds,
+    deleteClearIds: rows.clearIds,
+    deleteLapIds: (data.laps ?? []).filter((l) => l.courseId === courseId).map((l) => l.id),
   }
 }
 
@@ -295,6 +398,7 @@ export function applyChanges<T extends SekishoData>(data: T, changes: Changes): 
     courses: upsert(data.courses, changes.courses, changes.deleteCourseIds),
     progress: upsert(data.progress, changes.progress, changes.deleteProgressIds),
     clears: upsert(data.clears, changes.clears, changes.deleteClearIds),
+    laps: upsert(data.laps ?? [], changes.laps, changes.deleteLapIds),
   }
 }
 

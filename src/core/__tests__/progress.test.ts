@@ -5,11 +5,15 @@ import {
   checkItem,
   clearId,
   deleteCourse,
+  currentLap,
   isGateOpen,
+  lapId,
   newerProgress,
+  nextLap,
   progressId,
   removeOne,
   report,
+  restartCourse,
   settleClears,
   toggleItem,
   uncheckItem,
@@ -243,7 +247,7 @@ describe('保存・同期のための道具', () => {
       (d) => checkItem(d, 'c1', 'i2', T0),
     )
     const after = applyChanges(d, deleteCourse(d, 'c1'))
-    expect(after).toEqual({ courses: [], progress: [], clears: [] })
+    expect(after).toEqual({ courses: [], progress: [], clears: [], laps: [] })
   })
 
   it('applyChanges: アプリが足した項目は残す', () => {
@@ -256,5 +260,95 @@ describe('保存・同期のための道具', () => {
     const local = [p('a', '2026-11-20T10:00:00Z'), p('b', '2026-11-20T10:00:00Z')]
     const incoming = [p('a', '2026-11-20T09:00:00Z'), p('b', '2026-11-20T11:00:00Z'), p('c', '2026-11-20T08:00:00Z')]
     expect(newerProgress(local, incoming).map((x) => x.id)).toEqual(['b', 'c'])
+  })
+})
+
+describe('周回', () => {
+  const T2 = new Date('2026-11-21T10:00:00Z')
+  /** あいさつの関所をクリアしたところ */
+  const cleared1 = () =>
+    run(
+      data(),
+      (d) => checkItem(d, 'c1', 'i1', T0),
+      (d) => checkItem(d, 'c1', 'i2', T0),
+    ).d
+
+  it('もう一周する: 今の周を記録し、チェックとスタンプが空になって 2 周目になる', () => {
+    const d = run(cleared1(), (d) => nextLap(d, 'c1', T1)).d
+    const v = viewCourse(d, d.courses[0])
+    expect(v).toMatchObject({ lap: 2, cleared: 0, complete: false, started: false })
+    expect(v.gates[0].items.map((i) => i.done)).toEqual([0, 0])
+    expect(v.laps).toEqual([{ id: lapId('c1', 1), courseId: 'c1', round: 1, endedAt: T1.toISOString(), cleared: 1, total: 2, complete: false }])
+    expect(currentLap(d, 'c1')).toBe(2)
+    expect(d.progress).toEqual([])
+    expect(d.clears).toEqual([])
+  })
+
+  it('2 周目でも、関所をクリアするとスタンプと演出がまた出る。記録には周の番号が入る', () => {
+    let d = run(cleared1(), (d) => nextLap(d, 'c1', T1)).d
+    const r = run(
+      d,
+      (d) => checkItem(d, 'c1', 'i1', T2),
+      (d) => checkItem(d, 'c1', 'i2', T2),
+    )
+    d = r.d
+    expect(r.events.map((e) => e.kind)).toEqual(['gate'])
+    expect(d.clears[0]).toMatchObject({ id: clearId('c1', 'g1'), round: 2 })
+    expect(d.progress.every((p) => p.round === 2)).toBe(true)
+  })
+
+  it('前の周の記録が残っていても（ほかの端末から届いたなど）、今の周には数えない', () => {
+    const old = cleared1()
+    let d = run(old, (d) => nextLap(d, 'c1', T1)).d
+    // 前の周の進み具合とクリアの記録が戻ってきた
+    d = { ...d, progress: old.progress, clears: old.clears }
+    const v = viewCourse(d, d.courses[0])
+    expect(v.cleared).toBe(0)
+    expect(v.gates[0].items.map((i) => i.done)).toEqual([0, 0])
+    // 2 周目で済ませれば、前の周の記録を上書きして、演出も出る
+    const r = run(
+      d,
+      (d) => checkItem(d, 'c1', 'i1', T2),
+      (d) => checkItem(d, 'c1', 'i2', T2),
+    )
+    expect(r.events).toHaveLength(1)
+  })
+
+  it('3 周目まで進めると、周回の記録が古い順に 2 つ', () => {
+    let d = run(cleared1(), (d) => nextLap(d, 'c1', T1)).d
+    d = run(d, (d) => checkItem(d, 'c1', 'i3', T2), (d) => nextLap(d, 'c1', T2)).d
+    const v = viewCourse(d, d.courses[0])
+    expect(v.lap).toBe(3)
+    expect(v.laps.map((l) => [l.round, l.cleared])).toEqual([
+      [1, 1],
+      [2, 1],
+    ])
+  })
+
+  it('はじめからやり直す: チェック・スタンプ・周回の記録を全部消して 1 周目に戻る', () => {
+    let d = run(cleared1(), (d) => nextLap(d, 'c1', T1)).d
+    d = run(d, (d) => checkItem(d, 'c1', 'i3', T2), (d) => restartCourse(d, 'c1', T2)).d
+    const v = viewCourse(d, d.courses[0])
+    expect(v).toMatchObject({ lap: 1, laps: [], cleared: 0, started: false })
+    // 中の番号は進んでいるので、前の周の記録が戻ってきても数えない
+    const back = { ...d, clears: [{ id: clearId('c1', 'g1'), courseId: 'c1', gateId: 'g1', clearedAt: T0.toISOString() }] }
+    expect(viewCourse(back, back.courses[0]).cleared).toBe(0)
+    // やり直したあとも、関所をクリアすると演出が出る
+    expect(run(d, (d) => checkItem(d, 'c1', 'i3', T2)).events.map((e) => e.kind)).toEqual(['gate'])
+  })
+
+  it('周回の記録の無い 0.1.0 のデータも、1 周目として読める', () => {
+    const { laps: _l, ...v01 } = cleared1()
+    expect(viewCourse(v01, v01.courses[0])).toMatchObject({ lap: 1, cleared: 1, laps: [] })
+  })
+
+  it('コースを消すと、周回の記録も消える', () => {
+    const d = run(cleared1(), (d) => nextLap(d, 'c1', T1)).d
+    expect(applyChanges(d, deleteCourse(d, 'c1')).laps).toEqual([])
+  })
+
+  it('無いコースは何もしない', () => {
+    expect(nextLap(data(), 'nope', T0)).toEqual({})
+    expect(restartCourse(data(), 'nope', T0)).toEqual({})
   })
 })

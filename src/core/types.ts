@@ -86,6 +86,8 @@ export interface ItemProgress {
   done: number
   /** 済んだ日時（回数に届いたとき）。外すと消える */
   checkedAt?: string
+  /** 何周目の進み具合か（無ければ 1）。今の周のものだけを数える */
+  round?: number
   updatedAt: string
 }
 
@@ -99,6 +101,29 @@ export interface Clear {
   courseId: string
   gateId?: string
   clearedAt: string
+  /** 何周目のクリアか（無ければ 1）。今の周のものだけを数える */
+  round?: number
+}
+
+/**
+ * 周回の記録。「もう一周する」で、その周を記録して次の周へ進む。
+ * round は中の番号で、「はじめからやり直す」でも進む（そのときの記録は hidden にして、数えず・出さない）
+ */
+export interface Lap {
+  /** `${courseId}|${round}`（lapId） */
+  id: string
+  courseId: string
+  round: number
+  /** その周を終えた日時 */
+  endedAt: string
+  /** その周でクリアした関所の数 */
+  cleared: number
+  /** その周のときの関所の数 */
+  total: number
+  /** コースを全部クリアしていたか */
+  complete: boolean
+  /** はじめからやり直したときに隠した周（数えない・出さない） */
+  hidden?: boolean
 }
 
 /** 部品が扱うデータ全部。アプリは、これを保存先から読んで渡す */
@@ -106,6 +131,8 @@ export interface SekishoData {
   courses: Course[]
   progress: ItemProgress[]
   clears: Clear[]
+  /** 周回の記録（0.2.0 から。無ければ、どのコースも 1 周目） */
+  laps?: Lap[]
 }
 
 /** クリアの知らせ（画面がスタンプとご褒美を出すのに使う） */
@@ -129,9 +156,11 @@ export interface Changes {
   courses?: Course[]
   progress?: ItemProgress[]
   clears?: Clear[]
+  laps?: Lap[]
   deleteCourseIds?: string[]
   deleteProgressIds?: string[]
   deleteClearIds?: string[]
+  deleteLapIds?: string[]
   /** 新しくクリアしたもの（保存はしない。画面が演出に使う） */
   events?: ClearEvent[]
 }

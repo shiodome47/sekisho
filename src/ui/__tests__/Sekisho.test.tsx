@@ -107,6 +107,36 @@ describe('<Sekisho>', () => {
   })
 })
 
+describe('周回', () => {
+  it('もう一周すると、周回の記録が残り、2 周目でもう一度クリアの演出が出る', () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const c = course({ gates: [{ id: 'g1', title: 'あいさつ', items: [{ id: 'i1', title: 'おはよう' }] }] })
+    start(c)
+    expect(screen.getByRole('button', { name: 'もう一周する' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('checkbox', { name: '「おはよう」を済みにする' }))
+    fireEvent.click(screen.getByRole('button', { name: 'つぎへ' })) // 関所クリア
+    fireEvent.click(screen.getByRole('button', { name: 'つぎへ' })) // コース制覇
+    fireEvent.click(screen.getByRole('button', { name: 'もう一周する' }))
+    expect(screen.getByText('2 周目', { selector: '.sk-tag' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: '周回の記録' })).toHaveTextContent('1 周目')
+    expect(screen.getByRole('checkbox', { name: '「おはよう」を済みにする' })).not.toBeChecked()
+    fireEvent.click(screen.getByRole('checkbox', { name: '「おはよう」を済みにする' }))
+    expect(screen.getByRole('dialog', { name: '関所クリア！' })).toBeInTheDocument()
+  })
+
+  it('はじめからやり直すと、周回の記録も消えて 1 周目に戻る', () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    start()
+    fireEvent.click(screen.getByRole('checkbox', { name: '「おはよう」を済みにする' }))
+    fireEvent.click(screen.getByRole('button', { name: 'もう一周する' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: '「おはよう」を済みにする' }))
+    fireEvent.click(screen.getByRole('button', { name: 'はじめからやり直す' }))
+    expect(screen.queryByText('2 周目')).toBeNull()
+    expect(screen.queryByRole('region', { name: '周回の記録' })).toBeNull()
+    expect(screen.getByRole('checkbox', { name: '「おはよう」を済みにする' })).not.toBeChecked()
+  })
+})
+
 describe('<Celebration>', () => {
   const event = (c = course()) => ({ kind: 'gate' as const, course: c, gate: c.gates[1], cleared: 1, total: 2, at: T0.toISOString() })
 
