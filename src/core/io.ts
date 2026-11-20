@@ -4,6 +4,7 @@
  */
 import { settleClears } from './progress'
 import type { Changes, CheckItem, Course, Gate, RewardRef, SekishoData, TargetRef } from './types'
+import { safeUrl } from './url'
 
 /** コースのファイルの形 */
 export interface SekishoFile {
@@ -39,10 +40,22 @@ const id = (v: unknown): string | undefined => {
 }
 const MAX_COUNT = 9999
 
-function ref<T extends TargetRef | RewardRef>(v: unknown): T | undefined {
+/**
+ * チェック項目の中身・ご褒美の形を確かめる。
+ * url があるときは http(s) だけ（javascript: などは、項目の中身・ご褒美ごと落として、わけを errors に入れる）
+ */
+function ref<T extends TargetRef | RewardRef>(v: unknown, errors?: string[], where?: string): T | undefined {
   if (!isObj(v) || !text(v.type)) return undefined
   const out = { ...v, type: text(v.type)! } as T
   if ('id' in out && out.id !== undefined && typeof out.id !== 'string') return undefined
+  if ('url' in out) {
+    const url = safeUrl(out.url)
+    if (!url) {
+      errors?.push(`${where ?? ''}: 使えない URL（http・https 以外）を飛ばしました`)
+      return undefined
+    }
+    ;(out as Record<string, unknown>).url = url
+  }
   return out
 }
 
@@ -56,7 +69,7 @@ function readItem(v: unknown, seen: Set<string>, errors: string[], where: string
   }
   seen.add(itemId)
   const count = Math.floor(Number(v.count))
-  const target = ref<TargetRef>(v.target)
+  const target = ref<TargetRef>(v.target, errors, `${where}「${title}」`)
   const note = text(v.note)
   const { id: _i, title: _t, note: _n, target: _g, count: _c, ...rest } = v
   return {
@@ -82,7 +95,7 @@ function readGate(v: unknown, seenGates: Set<string>, seenItems: Set<string>, er
     .map((i) => readItem(i, seenItems, errors, `${where}「${title}」`))
     .filter((i): i is CheckItem => i !== null)
   const description = text(v.description)
-  const reward = ref<RewardRef>(v.reward)
+  const reward = ref<RewardRef>(v.reward, errors, `${where}「${title}」`)
   const stamp = isObj(v.stamp)
     ? { ...(text(v.stamp.text) ? { text: text(v.stamp.text) } : {}), ...(text(v.stamp.color) ? { color: text(v.stamp.color) } : {}) }
     : undefined
@@ -123,7 +136,7 @@ export function readCourse(v: unknown, now: Date, errors: string[] = []): Course
   const revision = Math.floor(Number(v.revision))
   const description = text(v.description)
   const color = text(v.color)
-  const reward = ref<RewardRef>(v.reward)
+  const reward = ref<RewardRef>(v.reward, errors, where)
   const { id: _i, title: _t, description: _d, origin: _o, route: _r, gates: _g, color: _c, reward: _w, revision: _v, createdAt: _ca, updatedAt: _ua, ...rest } = v
   return {
     ...rest,

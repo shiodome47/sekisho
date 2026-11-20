@@ -2,7 +2,11 @@ import { CardBoard, flattenCards, type CardBoardCardState, type CardPlace } from
 import { useMemo, useState } from 'react'
 import { newGate, newItem } from '../core/course'
 import type { CheckItem, Course, Gate, RewardRef } from '../core/types'
-import { stampOf, type RewardConnector, type TargetAdapter } from '../ui/connectors'
+import { getDomain } from '@shiodome47/video-utils'
+import { urlOf, urlTarget, urlVideoReward } from '../core/url'
+import { stampOf, type RewardConnector } from '../ui/connectors'
+import { isUrlVideoReward, resolveTargets, type ResolvedTargets } from '../ui/urlParts'
+import { UrlFields } from './UrlFields'
 import { JA_LABELS } from '../ui/labels'
 import type { CourseEditorProps } from '../ui/Sekisho'
 import { Stamp } from '../ui/Stamp'
@@ -16,8 +20,11 @@ const MAX_COUNT = 999
  * 関所はカードにして段組みで並べ、ドラッグで動かす（linkshelf の <CardBoard>）。
  * 保存するまでは、手元の下書きだけを変える
  */
-export function CourseEditor({ course, onSave, onCancel, targets, rewards = [], labels: labelsPatch }: CourseEditorProps) {
+export function CourseEditor({ course, onSave, onCancel, targets, rewards = [], allowUrl = true, labels: labelsPatch }: CourseEditorProps) {
   const labels = useMemo(() => ({ ...JA_LABELS, ...labelsPatch }), [labelsPatch])
+  // URL の項目にも印を出す（部品が受け持つ）
+  const resolved = useMemo(() => resolveTargets(targets, labels), [targets, labels])
+  const titleOf = targets?.titleOf
   const [draft, setDraft] = useState<Course>(course)
   const setGates = (fn: (gates: Gate[]) => Gate[]) => setDraft((d) => ({ ...d, gates: fn(d.gates) }))
   const setGate = (gateId: string, fn: (g: Gate) => Gate) => setGates((gs) => gs.map((g) => (g.id === gateId ? fn(g) : g)))
@@ -98,6 +105,8 @@ export function CourseEditor({ course, onSave, onCancel, targets, rewards = [], 
           reward={draft.reward}
           messageLabel={labels.courseReward}
           connectors={rewards}
+          allowUrl={allowUrl}
+          titleOf={titleOf}
           labels={labels}
           onChange={(reward) =>
             setDraft(({ reward: _r, ...d }) => (reward ? { ...d, reward } : (d as Course)))
@@ -131,8 +140,10 @@ export function CourseEditor({ course, onSave, onCancel, targets, rewards = [], 
                 const picked = await targets!.pick!()
                 if (picked) setGate(gate.id, (g) => ({ ...g, items: [...g.items, newItem({ title: picked.title, target: picked.target })] }))
               }}
-              renderBadge={targets?.renderBadge}
+              renderBadge={resolved.renderBadge}
               rewards={rewards}
+              allowUrl={allowUrl}
+              titleOf={titleOf}
               onChange={(fn) => setGate(gate.id, fn)}
               onRemove={() => {
                 if (gate.items.length === 0 || window.confirm(labels.removeGateConfirm(gate.title))) setGates((gs) => gs.filter((g) => g.id !== gate.id))
@@ -158,6 +169,8 @@ function GateEditor({
   onPick,
   renderBadge,
   rewards,
+  allowUrl,
+  titleOf,
   onChange,
   onRemove,
 }: {
@@ -169,12 +182,15 @@ function GateEditor({
   isDragging: boolean
   canPick: boolean
   onPick: () => void
-  renderBadge?: TargetAdapter['renderBadge']
+  renderBadge: ResolvedTargets['renderBadge']
   rewards: RewardConnector[]
+  allowUrl: boolean
+  titleOf?: (url: string) => Promise<string | null>
   onChange: (fn: (g: Gate) => Gate) => void
   onRemove: () => void
 }) {
   const [text, setText] = useState('')
+  const [addingUrl, setAddingUrl] = useState(false)
   const s = stampOf(gate, color)
   const setItem = (itemId: string, patch: Partial<CheckItem>) =>
     onChange((g) => ({ ...g, items: g.items.map((i) => (i.id === itemId ? { ...i, ...patch } : i)) }))
@@ -279,16 +295,38 @@ function GateEditor({
           {labels.addItem}
         </button>
       </form>
-      {canPick ? (
-        <button type="button" className="sk-btn sk-btn--ghost sk-pick" onClick={onPick}>
-          ＋ {labels.pickTarget}
-        </button>
+      {canPick || allowUrl ? (
+        <div className="sk-reward-field__pickers">
+          {canPick ? (
+            <button type="button" className="sk-btn sk-btn--ghost sk-pick" onClick={onPick}>
+              ＋ {labels.pickTarget}
+            </button>
+          ) : null}
+          {allowUrl && !addingUrl ? (
+            <button type="button" className="sk-btn sk-btn--ghost sk-pick" onClick={() => setAddingUrl(true)}>
+              ＋ {labels.addUrl}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      {addingUrl ? (
+        <UrlFields
+          labels={labels}
+          titleOf={titleOf}
+          onCancel={() => setAddingUrl(false)}
+          onSubmit={(url, name) => {
+            onChange((g) => ({ ...g, items: [...g.items, newItem({ title: labels.urlItemTitle(name), target: urlTarget(url) })] }))
+            setAddingUrl(false)
+          }}
+        />
       ) : null}
 
       <RewardField
         reward={gate.reward}
         messageLabel={labels.rewardMessage}
         connectors={rewards}
+        allowUrl={allowUrl}
+        titleOf={titleOf}
         labels={labels}
         onChange={(reward) => onChange(({ reward: _r, ...g }) => (reward ? { ...g, reward } : g))}
       />
@@ -304,19 +342,59 @@ function RewardField({
   reward,
   messageLabel,
   connectors,
+  allowUrl,
+  titleOf,
   labels,
   onChange,
 }: {
   reward?: RewardRef
   messageLabel: string
   connectors: RewardConnector[]
+  allowUrl: boolean
+  titleOf?: (url: string) => Promise<string | null>
   labels: L
   onChange: (reward: RewardRef | undefined) => void
 }) {
+  const [urlForm, setUrlForm] = useState<{ url: string; name: string } | null>(null)
   const pickers = connectors.filter((c) => c.pick && c.type !== 'message')
   const choose = async (c: RewardConnector) => {
     const picked = await c.pick!()
     if (picked) onChange({ ...picked, type: c.type })
+  }
+  if (urlForm) {
+    return (
+      <UrlFields
+        labels={labels}
+        titleOf={titleOf}
+        initialUrl={urlForm.url}
+        initialName={urlForm.name}
+        onCancel={() => setUrlForm(null)}
+        onSubmit={(url, name) => {
+          onChange(urlVideoReward(url, name))
+          setUrlForm(null)
+        }}
+      />
+    )
+  }
+  // URL の動画のご褒美（部品が受け持つ）
+  if (reward && isUrlVideoReward(reward)) {
+    const url = urlOf(reward)
+    const title = typeof reward.title === 'string' && reward.title ? reward.title : url ? getDomain(url) : ''
+    return (
+      <p className="sk-reward-chip">
+        <span className="sk-reward-chip__text">{labels.rewardOther(labels.urlReward(title))}</span>
+        <button
+          type="button"
+          className="sk-btn sk-btn--ghost sk-pick"
+          onClick={() => setUrlForm({ url: url ?? '', name: typeof reward.title === 'string' ? reward.title : '' })}
+        >
+          {labels.repickReward}
+        </button>
+        <button type="button" className="sk-icon-btn sk-icon-btn--danger" aria-label={labels.removeReward} onClick={() => onChange(undefined)}>
+          ×
+        </button>
+      </p>
+    )
   }
   if (reward && reward.type !== 'message') {
     const c = connectors.find((x) => x.type === reward.type)
@@ -348,13 +426,18 @@ function RewardField({
           onChange={(e) => onChange(e.target.value ? { type: 'message', text: e.target.value } : undefined)}
         />
       </label>
-      {pickers.length > 0 ? (
+      {pickers.length > 0 || allowUrl ? (
         <div className="sk-reward-field__pickers">
           {pickers.map((c) => (
             <button key={c.type} type="button" className="sk-btn sk-btn--ghost sk-pick" onClick={() => void choose(c)}>
               ＋ {labels.pickReward(c.label ?? c.type)}
             </button>
           ))}
+          {allowUrl ? (
+            <button type="button" className="sk-btn sk-btn--ghost sk-pick" onClick={() => setUrlForm({ url: '', name: '' })}>
+              ＋ {labels.pickRewardUrl}
+            </button>
+          ) : null}
         </div>
       ) : null}
     </div>

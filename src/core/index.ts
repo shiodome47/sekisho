@@ -59,4 +59,5 @@ export {
 } from './course'
 
 export { exportCourses, importCourses, parseCourses, readCourse } from './io'
+export { URL_TARGET, isUrlTarget, safeUrl, urlOf, urlTarget, urlVideoReward } from './url'
 export type { ImportResult, SekishoFile } from './io'

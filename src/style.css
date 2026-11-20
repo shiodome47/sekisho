@@ -782,6 +782,54 @@
   color: var(--sk-accent);
   padding-left: 0;
 }
+/* URL を入れる欄（0.4.0） */
+.sekisho .sk-url-fields {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px dashed var(--sk-border);
+  border-radius: 10px;
+}
+.sekisho .sk-url-fields__error {
+  margin: 0;
+  font-size: 12px;
+  color: var(--sk-danger);
+}
+.sekisho .sk-url-fields__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* URL の動画のご褒美（0.4.0） */
+.sekisho .sk-video-reward__title {
+  font-size: 17px;
+  font-weight: 700;
+  margin: 4px 0 10px;
+}
+.sekisho .sk-video-reward__frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #000;
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+.sekisho .sk-video-reward__frame :is(iframe, video) {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+.sekisho .sk-video-reward__actions {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .sekisho .sk-reward-field {
   display: grid;
   gap: 4px;

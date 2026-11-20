@@ -85,6 +85,18 @@ const videoReward: RewardConnector = {
 - 知らない `type` のご褒美は飛ばす（古い版のアプリでも止まらない）
 - `done()` を呼ぶと次へ進む。`reducedMotion`・`muted` も届くので、演出を合わせる
 
+### URL のチェック項目・URL の動画のご褒美（0.4.0）
+
+YouTube の URL・Dropbox の共有リンク・動画ファイルの URL などを、**アプリが何もしなくても**使えます。
+
+- チェック項目 `{ "type": "url", "url": "https://…" }`: リンクの印が付き、押すと別のタブで開く
+- ご褒美 `{ "type": "video", "url": "https://…", "title": "…" }`: クリアの演出の中で再生する（YouTube は埋め込み、Dropbox の共有リンクは再生用の形に、ほかは動画として）。「別のタブで開く」も出る
+- 作る画面: 関所のカードに「＋ URL から足す」、ご褒美の欄に「＋ ご褒美の動画を URL で」
+- URL は **http(s) だけ**。読み込むとき（`readCourse`・`parseCourses`）に、ほかの URL の項目の中身・ご褒美は落とす
+- 変えたいとき: `targets.openUrl(url, item)`（アプリの中のプレイヤーで見せるなど）、`targets.titleOf(url)`（作る画面で、ページの題名を名前の例に出す）、`allowUrl={false}`（作る画面に URL のボタンを出さない）
+- 印は、アプリの `renderBadge` が何か返せばそちらを使う（`null` を返せば部品の印）
+- 道具（`/core`）: `safeUrl`・`urlOf`・`urlTarget`・`urlVideoReward`。YouTube・Dropbox の扱いは [`@shiodome47/video-utils`](https://www.npmjs.com/package/@shiodome47/video-utils)
+
 ### 自動のチェックの演出（`<Celebration>`）
 
 アプリが `report()` で知らせて関所がクリアになったときは、返ってきた `events` を `<Celebration>` に渡して、練習の画面の上で見せます。
@@ -127,7 +139,8 @@ const view = viewCourse(data, data.courses[0])
 | 周回 | `nextLap`（もう一周する）・`restartCourse`（はじめからやり直す） |
 | 見る | `viewCourse`（何周目か・周回の記録も）・`isGateOpen`・`itemGoal`・`currentLap` |
 | コースを作る・直す | `newCourse`・`newGate`・`newItem`・`updateCourse`・`addGate`・`updateGate`・`removeGate`・`moveGate`・`addItem`・`updateItem`・`removeItem`・`moveItem`・`duplicateCourse` |
-| 配る・受け取る | `exportCourses`（JSON にする）・`parseCourses`（形を確かめて読む）・`importCourses`（新しい版だけ取り込む） |
+| 配る・受け取る | `exportCourses`（JSON にする）・`parseCourses`（形を確かめて読む。http(s) 以外の URL は落とす）・`importCourses`（新しい版だけ取り込む） |
+| URL | `safeUrl`・`urlOf`・`urlTarget`・`urlVideoReward` |
 | 保存・同期 | `applyChanges`・`deleteCourse`・`settleClears`・`newerProgress` |
 
 決まりごと:

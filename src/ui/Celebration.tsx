@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { ClearEvent } from '../core/types'
 import { stampOf, type RewardConnector, type StampRenderProps } from './connectors'
 import { JA_LABELS, type Labels } from './labels'
+import { isUrlVideoReward, urlVideoConnector } from './urlParts'
+import { urlOf } from '../core/url'
 import { Stamp, useReducedMotion } from './Stamp'
 
 /** 部品に入っているご褒美: ひみつの一言（{ type: 'message', text: '…' }） */
@@ -70,7 +72,15 @@ export function Celebration({
     () =>
       events.flatMap((event): Step[] => {
         const reward = event.kind === 'gate' ? event.gate?.reward : event.course.reward
-        const connector = reward && !isEmptyMessage(reward) ? connectors.get(reward.type) : undefined
+        // URL の動画のご褒美（{ type: 'video', url }）は部品が出す（http(s) でなければ飛ばす）
+        const connector =
+          !reward || isEmptyMessage(reward)
+            ? undefined
+            : isUrlVideoReward(reward)
+              ? urlOf(reward)
+                ? urlVideoConnector
+                : undefined
+              : connectors.get(reward.type)
         // 知らない type のご褒美は飛ばす（古い版のアプリでも止まらない）
         return connector ? [{ event, part: 'stamp' }, { event, part: 'reward', connector }] : [{ event, part: 'stamp' }]
       }),

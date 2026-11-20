@@ -70,6 +70,20 @@ export const JA_LABELS = {
   save: '保存',
   cancel: 'やめる',
   untitled: '名前のないコース',
+  // URL（0.4.0）
+  addUrl: 'URL から足す',
+  urlLabel: 'URL',
+  urlPlaceholder: 'https://youtu.be/…・Dropbox の共有リンクなど',
+  urlName: 'URL の名前',
+  urlNamePlaceholder: (example: string) => (example ? `名前（なくてもよい。例: ${example}）` : '名前（なくてもよい）'),
+  urlInvalid: 'http:// か https:// で始まる URL を入れてください',
+  useUrl: 'この URL にする',
+  urlItemTitle: (name: string) => `「${name}」を見る`,
+  urlBadge: 'URL',
+  pickRewardUrl: 'ご褒美の動画を URL で',
+  urlReward: (title: string) => `動画「${title}」（URL）`,
+  rewardVideo: 'ご褒美の動画',
+  openInNewTab: '別のタブで開く',
 }
 
 export type Labels = typeof JA_LABELS
@@ -143,4 +157,17 @@ export const EN_LABELS: Labels = {
   save: 'Save',
   cancel: 'Cancel',
   untitled: 'Untitled course',
+  addUrl: 'Add from URL',
+  urlLabel: 'URL',
+  urlPlaceholder: 'https://youtu.be/… or a shared Dropbox link',
+  urlName: 'Name for the URL',
+  urlNamePlaceholder: (example) => (example ? `Name (optional, e.g. ${example})` : 'Name (optional)'),
+  urlInvalid: 'Enter a URL that starts with http:// or https://',
+  useUrl: 'Use this URL',
+  urlItemTitle: (name) => `Watch "${name}"`,
+  urlBadge: 'URL',
+  pickRewardUrl: 'Reward video from a URL',
+  urlReward: (title) => `Video "${title}" (URL)`,
+  rewardVideo: 'Reward video',
+  openInNewTab: 'Open in a new tab',
 }

@@ -8,7 +8,7 @@ export default defineConfig({
   sourcemap: true,
   splitting: true,
   target: 'es2020',
-  external: ['react', 'react/jsx-runtime', 'react-dom', 'linkshelf'],
+  external: ['react', 'react/jsx-runtime', 'react-dom', 'linkshelf', '@shiodome47/video-utils'],
   // Next.js の App Router でも、そのまま使えるように（画面はブラウザで動く）
   banner: { js: "'use client'" },
 })

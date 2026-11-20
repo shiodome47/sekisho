@@ -76,6 +76,48 @@ describe('<CourseEditor>', () => {
     expect(onSave.mock.calls[0][0].gates[0].reward).toBeUndefined()
   })
 
+  it('URL から項目を足せる。名前が無ければページの題名。http(s) でなければ足せない', async () => {
+    const onSave = vi.fn()
+    const titleOf = vi.fn().mockResolvedValue('あいさつの見本')
+    const c: Course = { ...newCourse({ title: 'x' }, T0), gates: [{ id: 'g', title: 'a', items: [] }] }
+    render(<CourseEditor course={c} onSave={onSave} onCancel={() => {}} targets={{ titleOf }} />)
+    fireEvent.click(screen.getByRole('button', { name: /URL から足す/ }))
+    fireEvent.change(screen.getByLabelText('URL'), { target: { value: 'javascript:alert(1)' } })
+    expect(screen.getByRole('alert')).toHaveTextContent('http:// か https://')
+    expect(screen.getByRole('button', { name: 'この URL にする' })).toBeDisabled()
+    fireEvent.change(screen.getByLabelText('URL'), { target: { value: 'https://youtu.be/abc' } })
+    await screen.findByPlaceholderText('名前（なくてもよい。例: あいさつの見本）', {}, { timeout: 2000 })
+    fireEvent.click(screen.getByRole('button', { name: 'この URL にする' }))
+    expect(screen.getByDisplayValue('「あいさつの見本」を見る')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    expect(onSave.mock.calls[0][0].gates[0].items[0]).toMatchObject({ title: '「あいさつの見本」を見る', target: { type: 'url', url: 'https://youtu.be/abc' } })
+  })
+
+  it('ご褒美の動画を URL で選び、選び直す・外す', () => {
+    const onSave = vi.fn()
+    const c: Course = { ...newCourse({ title: 'x' }, T0), gates: [{ id: 'g', title: 'a', items: [] }] }
+    render(<CourseEditor course={c} onSave={onSave} onCancel={() => {}} />)
+    // コースと関所の 2 つ。関所のほうに
+    fireEvent.click(screen.getAllByRole('button', { name: /ご褒美の動画を URL で/ })[1])
+    fireEvent.change(screen.getByLabelText('URL'), { target: { value: 'https://www.dropbox.com/s/x/a.mp4' } })
+    fireEvent.change(screen.getByLabelText('URL の名前'), { target: { value: 'おめでとう' } })
+    fireEvent.click(screen.getByRole('button', { name: 'この URL にする' }))
+    expect(screen.getByText('ご褒美: 動画「おめでとう」（URL）')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '選び直す' }))
+    expect(screen.getByLabelText('URL')).toHaveValue('https://www.dropbox.com/s/x/a.mp4')
+    fireEvent.change(screen.getByLabelText('URL の名前'), { target: { value: 'よくできました' } })
+    fireEvent.click(screen.getByRole('button', { name: 'この URL にする' }))
+    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    expect(onSave.mock.calls[0][0].gates[0].reward).toEqual({ type: 'video', url: 'https://www.dropbox.com/s/x/a.mp4', title: 'よくできました' })
+  })
+
+  it('allowUrl={false} なら URL のボタンは出ない', () => {
+    const c: Course = { ...newCourse({ title: 'x' }, T0), gates: [{ id: 'g', title: 'a', items: [] }] }
+    render(<CourseEditor course={c} onSave={() => {}} onCancel={() => {}} allowUrl={false} />)
+    expect(screen.queryByRole('button', { name: /URL から足す/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /ご褒美の動画を URL で/ })).toBeNull()
+  })
+
   it('やめると onCancel', () => {
     const onCancel = vi.fn()
     render(<CourseEditor course={newCourse({ title: 'x' }, T0)} onSave={() => {}} onCancel={onCancel} />)

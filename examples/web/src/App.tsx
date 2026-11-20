@@ -54,9 +54,12 @@ const SAMPLE: Course = {
       id: 'g-kazu',
       title: '数字',
       stamp: { text: '数', color: '#1d4ed8' },
+      // URL の項目・URL の動画のご褒美（0.4.0）。部品が受け持つので、アプリは何もしなくてよい
+      reward: { type: 'video', url: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4', title: '花の動画（CC0）' },
       items: [
         { id: 'i-1to5', title: '1 から 5 まで' },
         { id: 'i-6to10', title: '6 から 10 まで' },
+        { id: 'i-url', title: '「花の動画」を見る（URL）', target: { type: 'url', url: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4' } },
       ],
     },
   ],
@@ -134,7 +137,8 @@ export function App() {
   const dark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
 
   const targets: TargetAdapter = {
-    renderBadge: (t) => (t.type === 'segment' ? '🔁' : '▶'),
+    // URL の項目の印は部品が出す（ここで null を返すと、部品の印になる）
+    renderBadge: (t) => (t.type === 'segment' ? '🔁' : t.type === 'lesson' ? '▶' : null),
     open: (t) => setToast(`${SEGMENTS.find((s) => s.id === t.id)?.title ?? t.id} を開きます（見本）`),
     pick: () =>
       new Promise((resolve) => {

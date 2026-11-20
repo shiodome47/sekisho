@@ -16,6 +16,13 @@ export interface TargetAdapter {
   open?: (target: TargetRef, item: CheckItem) => void
   /** 開けるか（消した動画など、開けないものは false）。無ければ開ける */
   canOpen?: (target: TargetRef) => boolean
+  /**
+   * URL のチェック項目（{ type: 'url', url }）を開く（0.4.0）。無ければ、部品が別のタブで開く。
+   * アプリの中のプレイヤーで見せたいときなどに渡す。url は http(s) のものだけが届く
+   */
+  openUrl?: (url: string, item: CheckItem) => void
+  /** 作る画面で URL を入れたとき、ページの題名を取ってくる（0.4.0。無ければ URL から名前を作る） */
+  titleOf?: (url: string) => Promise<string | null>
 }
 
 /** ご褒美のコネクタに渡すもの */
