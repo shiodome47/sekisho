@@ -18,6 +18,7 @@ import {
 import type { Changes, ClearEvent, Course, SekishoData } from '../core/types'
 import { Celebration } from './Celebration'
 import { stampOf, type RewardConnector, type StampRenderProps, type TargetAdapter } from './connectors'
+import { resolveTargets, type ResolvedTargets } from './urlParts'
 import { JA_LABELS, type Labels } from './labels'
 import { Stamp, useReducedMotion } from './Stamp'
 
@@ -30,6 +31,8 @@ export interface CourseEditorProps {
   targets?: TargetAdapter
   /** ご褒美のコネクタ（pick があるものは、作る画面で選べる） */
   rewards?: RewardConnector[]
+  /** 「＋ URL から足す」「ご褒美の動画を URL で」を出す（0.4.0。既定は true） */
+  allowUrl?: boolean
   labels?: Partial<Labels>
 }
 
@@ -55,6 +58,11 @@ export interface SekishoProps {
   allowImport?: boolean
   /** 「書き出す（配る用）」を出す。既定は true */
   allowExport?: boolean
+  /**
+   * 作る画面で、URL（YouTube・Dropbox など）からチェック項目・ご褒美の動画を足せるようにする（0.4.0）。既定は true。
+   * false でも、もうある URL の項目・ご褒美は使える
+   */
+  allowUrl?: boolean
   /** 演出を減らす。無ければ端末の設定に従う */
   reducedMotion?: boolean
   /** 音を出さない（コネクタに渡す）。既定は true */
@@ -81,6 +89,7 @@ export function Sekisho(props: SekishoProps) {
     editor: Editor,
     allowImport = true,
     allowExport = true,
+    allowUrl = true,
     reducedMotion: forceReduced,
     muted = true,
     theme = 'system',
@@ -88,6 +97,8 @@ export function Sekisho(props: SekishoProps) {
     className,
   } = props
   const labels = useMemo(() => ({ ...JA_LABELS, ...labelsPatch }), [labelsPatch])
+  // URL のチェック項目は部品が受け持つ（アプリの窓口に足す）
+  const resolvedTargets = useMemo(() => resolveTargets(targets, labels), [targets, labels])
   const reducedMotion = useReducedMotion(forceReduced)
   const [screen, setScreen] = useState<Screen>({ kind: 'list' })
   const [events, setEvents] = useState<ClearEvent[]>([])
@@ -117,6 +128,7 @@ export function Sekisho(props: SekishoProps) {
         onCancel={() => setScreen(screen.isNew ? { kind: 'list' } : { kind: 'course', id: screen.course.id })}
         targets={targets}
         rewards={rewards}
+        allowUrl={allowUrl}
         labels={labelsPatch}
       />
     )
@@ -125,7 +137,7 @@ export function Sekisho(props: SekishoProps) {
       <CoursePage
         view={viewCourse(data, current)}
         labels={labels}
-        targets={targets}
+        targets={resolvedTargets}
         reducedMotion={reducedMotion}
         onBack={() => setScreen({ kind: 'list' })}
         onToggle={(itemId) => change(toggleItem(data, current.id, itemId, now()))}
@@ -328,7 +340,7 @@ function CoursePage({
 }: {
   view: CourseView
   labels: Labels
-  targets?: TargetAdapter
+  targets: ResolvedTargets
   reducedMotion: boolean
   onBack: () => void
   onToggle: (itemId: string) => void
@@ -465,7 +477,7 @@ function GateCard({
   gate: GateView
   courseColor?: string
   labels: Labels
-  targets?: TargetAdapter
+  targets: ResolvedTargets
   reducedMotion: boolean
   onToggle: (itemId: string) => void
   onPlus: (itemId: string) => void
@@ -504,14 +516,15 @@ function ItemRow({
   view: ItemView
   disabled: boolean
   labels: Labels
-  targets?: TargetAdapter
+  targets: ResolvedTargets
   onToggle: (itemId: string) => void
   onPlus: (itemId: string) => void
   onMinus: (itemId: string) => void
 }) {
   const { item } = v
   const target = item.target
-  const canOpen = !!target && !!targets?.open && (targets.canOpen?.(target) ?? true)
+  const canOpen = !!target && targets.canOpen(target)
+  const badge = target ? targets.renderBadge(target, item) : null
   return (
     <li className={['sk-item', v.complete ? 'sk-item--done' : ''].filter(Boolean).join(' ')}>
       <button
@@ -530,9 +543,9 @@ function ItemRow({
         ) : null}
       </button>
       <span className="sk-item__body">
-        {target && targets?.renderBadge ? <span className="sk-item__badge">{targets.renderBadge(target, item)}</span> : null}
+        {badge !== null && badge !== undefined ? <span className="sk-item__badge">{badge}</span> : null}
         {canOpen ? (
-          <button type="button" className="sk-item__title sk-item__title--link" aria-label={labels.open(item.title)} onClick={() => targets!.open!(target!, item)}>
+          <button type="button" className="sk-item__title sk-item__title--link" aria-label={labels.open(item.title)} onClick={() => targets.open(target!, item)}>
             {item.title}
           </button>
         ) : (

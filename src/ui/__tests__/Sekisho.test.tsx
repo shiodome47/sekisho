@@ -137,6 +137,40 @@ describe('周回', () => {
   })
 })
 
+describe('URL のチェック項目', () => {
+  const urlCourse = () =>
+    course({
+      gates: [
+        {
+          id: 'g1',
+          title: 'あいさつ',
+          items: [
+            { id: 'i1', title: '見本を見る', target: { type: 'url', url: 'https://youtu.be/abc' } },
+            { id: 'i2', title: 'あやしい', target: { type: 'url', url: 'javascript:alert(1)' } },
+          ],
+        },
+      ],
+    })
+
+  it('印が出て、押すと別のタブで開く。http(s) でなければ押せない', () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null)
+    start(urlCourse())
+    expect(screen.getAllByRole('img', { name: 'URL' })).toHaveLength(2)
+    fireEvent.click(screen.getByRole('button', { name: '「見本を見る」を開く' }))
+    expect(open).toHaveBeenCalledWith('https://youtu.be/abc', '_blank', 'noopener,noreferrer')
+    expect(screen.queryByRole('button', { name: '「あやしい」を開く' })).toBeNull()
+    open.mockRestore()
+  })
+
+  it('アプリの openUrl があれば、そちらで開く。アプリの印があれば、そちらを出す', () => {
+    const openUrl = vi.fn()
+    start(urlCourse(), { targets: { openUrl, renderBadge: (t) => (t.type === 'url' ? '🔗' : null) } })
+    fireEvent.click(screen.getByRole('button', { name: '「見本を見る」を開く' }))
+    expect(openUrl).toHaveBeenCalledWith('https://youtu.be/abc', expect.objectContaining({ id: 'i1' }))
+    expect(screen.getAllByText('🔗')).toHaveLength(2)
+  })
+})
+
 describe('<Celebration>', () => {
   const event = (c = course()) => ({ kind: 'gate' as const, course: c, gate: c.gates[1], cleared: 1, total: 2, at: T0.toISOString() })
 
@@ -185,6 +219,37 @@ describe('<Celebration>', () => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     })
     expect(onDone).toHaveBeenCalled()
+  })
+
+  const urlEvent = (url: unknown) => {
+    const c = course({ gates: [{ id: 'g', title: 'a', items: [], reward: { type: 'video', url, title: 'おめでとう' } }] })
+    return { kind: 'gate' as const, course: c, gate: c.gates[0], cleared: 1, total: 1, at: T0.toISOString() }
+  }
+
+  it('URL の動画のご褒美: YouTube は埋め込み。アプリの video コネクタがあっても、URL のものは部品が出す', () => {
+    const appVideo: RewardConnector = { type: 'video', render: () => <p>アプリの動画</p> }
+    render(<Celebration events={[urlEvent('https://youtu.be/dQw4w9WgXcQ')]} onDone={() => {}} rewards={[appVideo]} reducedMotion />)
+    fireEvent.click(screen.getByRole('button', { name: 'つぎへ' }))
+    expect(screen.getByText('ご褒美の動画')).toBeInTheDocument()
+    expect(screen.queryByText('アプリの動画')).toBeNull()
+    expect(document.querySelector('iframe')?.getAttribute('src')).toContain('/embed/dQw4w9WgXcQ')
+  })
+
+  it('URL の動画のご褒美: Dropbox の共有リンクは再生用の形で動画に。別のタブでも開ける', () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null)
+    render(<Celebration events={[urlEvent('https://www.dropbox.com/scl/fi/x/a.mp4?rlkey=k&dl=0')]} onDone={() => {}} reducedMotion />)
+    fireEvent.click(screen.getByRole('button', { name: 'つぎへ' }))
+    expect(document.querySelector('video')?.getAttribute('src')).toBe('https://www.dropbox.com/scl/fi/x/a.mp4?rlkey=k&raw=1')
+    fireEvent.click(screen.getByRole('button', { name: '別のタブで開く' }))
+    expect(open).toHaveBeenCalled()
+    open.mockRestore()
+  })
+
+  it('URL が http(s) でないご褒美は飛ばす', () => {
+    const onDone = vi.fn()
+    render(<Celebration events={[urlEvent('javascript:alert(1)')]} onDone={onDone} reducedMotion />)
+    fireEvent.click(screen.getByRole('button', { name: 'つぎへ' }))
+    expect(onDone).toHaveBeenCalledTimes(1)
   })
 
   it('events が空なら何も出さない', () => {
