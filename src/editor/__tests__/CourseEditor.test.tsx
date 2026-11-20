@@ -46,6 +46,36 @@ describe('<CourseEditor>', () => {
     expect(onSave.mock.calls[0][0].gates[0].items).toEqual([{ id: 'i2', title: 'two', count: 5 }])
   })
 
+  it('アプリのコネクタで、関所とコースのご褒美を選べる。選び直す・外すもできる', async () => {
+    const onSave = vi.fn()
+    const pick = vi.fn().mockResolvedValueOnce({ type: 'ignored', id: 'L1', title: 'おめでとう' }).mockResolvedValueOnce({ id: 'L2', title: 'よくできました' })
+    const video = { type: 'video', label: '動画', pick, render: () => null }
+    const c: Course = { ...newCourse({ title: 'x' }, T0), gates: [{ id: 'g', title: 'a', items: [{ id: 'i1', title: 'one' }] }] }
+    render(<CourseEditor course={c} onSave={onSave} onCancel={() => {}} rewards={[video]} />)
+    const buttons = screen.getAllByRole('button', { name: /ご褒美の動画を選ぶ/ })
+    expect(buttons).toHaveLength(2) // コースと関所
+    fireEvent.click(buttons[1])
+    await screen.findByText('ご褒美: 動画「おめでとう」')
+    fireEvent.click(screen.getByRole('button', { name: '選び直す' }))
+    await screen.findByText('ご褒美: 動画「よくできました」')
+    fireEvent.change(screen.getByLabelText('コース制覇のご褒美: ひみつの一言（なくてもよい）'), { target: { value: '全部おわり！' } })
+    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    const saved: Course = onSave.mock.calls[0][0]
+    expect(saved.gates[0].reward).toEqual({ type: 'video', id: 'L2', title: 'よくできました' })
+    expect(saved.reward).toEqual({ type: 'message', text: '全部おわり！' })
+  })
+
+  it('pick の無いご褒美は、名前を出して外せるだけ', () => {
+    const onSave = vi.fn()
+    const c: Course = { ...newCourse({ title: 'x' }, T0), gates: [{ id: 'g', title: 'a', items: [], reward: { type: 'confetti' } }] }
+    render(<CourseEditor course={c} onSave={onSave} onCancel={() => {}} rewards={[{ type: 'confetti', label: '紙吹雪', render: () => null }]} />)
+    expect(screen.getByText('ご褒美: 紙吹雪')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '選び直す' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'ご褒美を外す' }))
+    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    expect(onSave.mock.calls[0][0].gates[0].reward).toBeUndefined()
+  })
+
   it('やめると onCancel', () => {
     const onCancel = vi.fn()
     render(<CourseEditor course={newCourse({ title: 'x' }, T0)} onSave={() => {}} onCancel={onCancel} />)

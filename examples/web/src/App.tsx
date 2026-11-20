@@ -77,6 +77,9 @@ function load(): SekishoData {
 /** アプリが足すご褒美のコネクタの見本: 紙吹雪 */
 const confetti: RewardConnector = {
   type: 'confetti',
+  // 作る画面で「＋ ご褒美の紙吹雪を選ぶ」が出る（動画などなら、ここでアプリの選ぶ画面を出す）
+  label: '紙吹雪',
+  pick: async () => ({ type: 'confetti', title: 'カラフル' }),
   render: ({ done, reducedMotion }) => <Confetti done={done} still={reducedMotion} />,
 }
 
