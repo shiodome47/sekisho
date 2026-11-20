@@ -782,6 +782,20 @@
   color: var(--sk-accent);
   padding-left: 0;
 }
+.sekisho .sk-reward-field {
+  display: grid;
+  gap: 4px;
+}
+.sekisho .sk-reward-field__pickers {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.sekisho .sk-reward-chip__text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .sekisho .sk-reward-chip {
   display: flex;
   align-items: center;

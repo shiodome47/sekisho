@@ -38,6 +38,15 @@ export interface RewardRenderProps {
 export interface RewardConnector {
   type: string
   render: (props: RewardRenderProps) => ReactNode
+  /** 作る画面のボタンの名前（「動画」など）。pick と一緒に渡す */
+  label?: string
+  /**
+   * 作る画面で、このご褒美を選ぶ（0.3.0）。アプリが自分の画面で選ばせ、ご褒美を返す（やめたら null）。
+   * 渡すと、作る画面の関所とコースに「＋ 動画を選ぶ」のようなボタンが出る
+   */
+  pick?: () => Promise<RewardRef | null>
+  /** 作る画面で、選んだご褒美をどう見せるか（「動画「おめでとう」」など）。無ければ reward.title か type */
+  describe?: (reward: RewardRef) => string
 }
 
 /** スタンプ（クリアの演出）を差し替えるときに渡すもの */

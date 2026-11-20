@@ -28,6 +28,8 @@ export interface CourseEditorProps {
   onSave: (course: Course) => void
   onCancel: () => void
   targets?: TargetAdapter
+  /** ご褒美のコネクタ（pick があるものは、作る画面で選べる） */
+  rewards?: RewardConnector[]
   labels?: Partial<Labels>
 }
 
@@ -114,6 +116,7 @@ export function Sekisho(props: SekishoProps) {
         onSave={saveCourse}
         onCancel={() => setScreen(screen.isNew ? { kind: 'list' } : { kind: 'course', id: screen.course.id })}
         targets={targets}
+        rewards={rewards}
         labels={labelsPatch}
       />
     )

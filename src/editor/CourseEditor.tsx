@@ -1,8 +1,8 @@
 import { CardBoard, flattenCards, type CardBoardCardState, type CardPlace } from 'linkshelf'
 import { useMemo, useState } from 'react'
 import { newGate, newItem } from '../core/course'
-import type { CheckItem, Course, Gate } from '../core/types'
-import { stampOf, type TargetAdapter } from '../ui/connectors'
+import type { CheckItem, Course, Gate, RewardRef } from '../core/types'
+import { stampOf, type RewardConnector, type TargetAdapter } from '../ui/connectors'
 import { JA_LABELS } from '../ui/labels'
 import type { CourseEditorProps } from '../ui/Sekisho'
 import { Stamp } from '../ui/Stamp'
@@ -16,7 +16,7 @@ const MAX_COUNT = 999
  * 関所はカードにして段組みで並べ、ドラッグで動かす（linkshelf の <CardBoard>）。
  * 保存するまでは、手元の下書きだけを変える
  */
-export function CourseEditor({ course, onSave, onCancel, targets, labels: labelsPatch }: CourseEditorProps) {
+export function CourseEditor({ course, onSave, onCancel, targets, rewards = [], labels: labelsPatch }: CourseEditorProps) {
   const labels = useMemo(() => ({ ...JA_LABELS, ...labelsPatch }), [labelsPatch])
   const [draft, setDraft] = useState<Course>(course)
   const setGates = (fn: (gates: Gate[]) => Gate[]) => setDraft((d) => ({ ...d, gates: fn(d.gates) }))
@@ -94,6 +94,15 @@ export function CourseEditor({ course, onSave, onCancel, targets, labels: labels
             ))}
           </div>
         </div>
+        <RewardField
+          reward={draft.reward}
+          messageLabel={labels.courseReward}
+          connectors={rewards}
+          labels={labels}
+          onChange={(reward) =>
+            setDraft(({ reward: _r, ...d }) => (reward ? { ...d, reward } : (d as Course)))
+          }
+        />
       </div>
 
       <CardBoard
@@ -123,6 +132,7 @@ export function CourseEditor({ course, onSave, onCancel, targets, labels: labels
                 if (picked) setGate(gate.id, (g) => ({ ...g, items: [...g.items, newItem({ title: picked.title, target: picked.target })] }))
               }}
               renderBadge={targets?.renderBadge}
+              rewards={rewards}
               onChange={(fn) => setGate(gate.id, fn)}
               onRemove={() => {
                 if (gate.items.length === 0 || window.confirm(labels.removeGateConfirm(gate.title))) setGates((gs) => gs.filter((g) => g.id !== gate.id))
@@ -147,6 +157,7 @@ function GateEditor({
   canPick,
   onPick,
   renderBadge,
+  rewards,
   onChange,
   onRemove,
 }: {
@@ -159,6 +170,7 @@ function GateEditor({
   canPick: boolean
   onPick: () => void
   renderBadge?: TargetAdapter['renderBadge']
+  rewards: RewardConnector[]
   onChange: (fn: (g: Gate) => Gate) => void
   onRemove: () => void
 }) {
@@ -183,7 +195,6 @@ function GateEditor({
     onChange((g) => ({ ...g, items: [...g.items, newItem({ title, count })] }))
     setText('')
   }
-  const message = gate.reward?.type === 'message' ? String(gate.reward.text ?? '') : ''
   return (
     <section className="sk-card sk-gate-editor" style={{ opacity: isDragging ? 0.5 : 1 }}>
       <div className="sk-gate-editor__head">
@@ -274,27 +285,78 @@ function GateEditor({
         </button>
       ) : null}
 
-      {gate.reward && gate.reward.type !== 'message' ? (
-        <p className="sk-reward-chip">
-          {labels.rewardOther(gate.reward.type)}
-          <button type="button" className="sk-icon-btn sk-icon-btn--danger" aria-label={labels.removeReward} onClick={() => onChange(({ reward: _r, ...g }) => g)}>
-            ×
-          </button>
-        </p>
-      ) : (
-        <label className="sk-field">
-          <span className="sk-field__label">{labels.rewardMessage}</span>
-          <textarea
-            className="sk-input"
-            rows={2}
-            value={message}
-            onChange={(e) => {
-              const t = e.target.value
-              onChange(({ reward: _r, ...g }) => (t ? { ...g, reward: { type: 'message', text: t } } : g))
-            }}
-          />
-        </label>
-      )}
+      <RewardField
+        reward={gate.reward}
+        messageLabel={labels.rewardMessage}
+        connectors={rewards}
+        labels={labels}
+        onChange={(reward) => onChange(({ reward: _r, ...g }) => (reward ? { ...g, reward } : g))}
+      />
     </section>
+  )
+}
+
+/**
+ * ご褒美の欄（関所・コース）。
+ * ひみつの一言（message）は、ここで文を書く。ほかのご褒美（動画など）は、アプリのコネクタの pick で選ぶ
+ */
+function RewardField({
+  reward,
+  messageLabel,
+  connectors,
+  labels,
+  onChange,
+}: {
+  reward?: RewardRef
+  messageLabel: string
+  connectors: RewardConnector[]
+  labels: L
+  onChange: (reward: RewardRef | undefined) => void
+}) {
+  const pickers = connectors.filter((c) => c.pick && c.type !== 'message')
+  const choose = async (c: RewardConnector) => {
+    const picked = await c.pick!()
+    if (picked) onChange({ ...picked, type: c.type })
+  }
+  if (reward && reward.type !== 'message') {
+    const c = connectors.find((x) => x.type === reward.type)
+    const name = c?.label ?? reward.type
+    const text = c?.describe?.(reward) ?? (typeof reward.title === 'string' && reward.title ? `${name}「${reward.title}」` : name)
+    return (
+      <p className="sk-reward-chip">
+        <span className="sk-reward-chip__text">{labels.rewardOther(text)}</span>
+        {c?.pick ? (
+          <button type="button" className="sk-btn sk-btn--ghost sk-pick" onClick={() => void choose(c)}>
+            {labels.repickReward}
+          </button>
+        ) : null}
+        <button type="button" className="sk-icon-btn sk-icon-btn--danger" aria-label={labels.removeReward} onClick={() => onChange(undefined)}>
+          ×
+        </button>
+      </p>
+    )
+  }
+  const message = reward?.type === 'message' ? String(reward.text ?? '') : ''
+  return (
+    <div className="sk-reward-field">
+      <label className="sk-field">
+        <span className="sk-field__label">{messageLabel}</span>
+        <textarea
+          className="sk-input"
+          rows={2}
+          value={message}
+          onChange={(e) => onChange(e.target.value ? { type: 'message', text: e.target.value } : undefined)}
+        />
+      </label>
+      {pickers.length > 0 ? (
+        <div className="sk-reward-field__pickers">
+          {pickers.map((c) => (
+            <button key={c.type} type="button" className="sk-btn sk-btn--ghost sk-pick" onClick={() => void choose(c)}>
+              ＋ {labels.pickReward(c.label ?? c.type)}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
   )
 }

@@ -9,8 +9,7 @@
 - 自分でチェックするのが基本。アプリが「これをした」と知らせると、自動でも進む
 - 関所をクリアするたびに、スタンプとご褒美（コネクタでつなぐ）
 
-> 状態: **作っているところ**（npm にはまだ出していません）。設計は [`docs/design.md`](docs/design.md)。
-> 見本のページは `npm run dev` で開けます。
+> 見本: https://sekisho-rho.vercel.app ・設計は [`docs/design.md`](docs/design.md)
 
 | 入り口 | 中身 | 要るもの |
 |---|---|---|
@@ -72,6 +71,17 @@ const videoReward: RewardConnector = {
 ```
 
 - 部品に入っているもの: `message`（ひみつの一言。`{ "type": "message", "text": "…" }`）。同じ `type` を渡せば差し替わる
+- **作る画面で選べるようにする**（0.3.0）: コネクタに `label` と `pick` を足すと、作る画面の関所とコースに「＋ ご褒美の動画を選ぶ」が出る。
+  `pick` はアプリの選ぶ画面を出して、ご褒美（`{ id, title, … }`）を返す。見せ方を変えるときは `describe`
+
+```tsx
+const videoReward: RewardConnector = {
+  type: 'video',
+  label: '動画',
+  pick: () => openMyVideoPicker(), // → { id: 'lesson-123', title: 'おめでとう' }（やめたら null）
+  render: ({ reward, done }) => <MyVideo id={String(reward.id)} onEnded={done} />,
+}
+```
 - 知らない `type` のご褒美は飛ばす（古い版のアプリでも止まらない）
 - `done()` を呼ぶと次へ進む。`reducedMotion`・`muted` も届くので、演出を合わせる
 
@@ -135,7 +145,7 @@ npm install
 npm run dev
 ```
 
-`examples/web` にあります。紙吹雪のご褒美（アプリが足すコネクタの見本）・区間を選ぶ窓口・自動のチェックを試せます。
+`examples/web` にあります（公開しているもの: https://sekisho-rho.vercel.app ）。紙吹雪のご褒美（アプリが足すコネクタの見本。作る画面でも選べる）・区間を選ぶ窓口・自動のチェック・周回を試せます。
 公開の手順は [`PUBLISHING.md`](PUBLISHING.md)。
 
 ## ライセンス
