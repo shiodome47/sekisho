@@ -149,4 +149,23 @@ describe('<CourseEditor>', () => {
     const folds = [...container.querySelectorAll('details.sk-fold')] as HTMLDetailsElement[]
     expect(folds.map((d) => d.open)).toEqual([false, true])
   })
+
+  it('スタンプの字: 漢字に変換している間は切らない。決まってから 2 文字にする', () => {
+    const onSave = vi.fn()
+    let c = newCourse({ title: 'c' }, T0)
+    c = { ...c, gates: [newGate({ title: 'A' })] }
+    render(<CourseEditor course={c} onSave={onSave} onCancel={() => {}} />)
+    const input = screen.getByLabelText('スタンプの字') as HTMLInputElement
+    fireEvent.compositionStart(input)
+    fireEvent.change(input, { target: { value: 'きわめて' } })
+    expect(input.value).toBe('きわめて')
+    fireEvent.change(input, { target: { value: '極めて' } })
+    fireEvent.compositionEnd(input)
+    expect(input.value).toBe('極め')
+    // 変換を使わない入力は、その場で 2 文字に
+    fireEvent.change(input, { target: { value: 'abc' } })
+    expect(input.value).toBe('ab')
+    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    expect(onSave.mock.calls[0][0].gates[0].stamp.text).toBe('ab')
+  })
 })
