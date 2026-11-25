@@ -1,6 +1,6 @@
 {
   "name": "@shiodome47/sekisho",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "description": "関所めぐり: チェックリストをクリアしていくと、通行手形にスタンプが押される部品。コース・関所・チェック項目・ご褒美のコネクタ",
   "keywords": [
     "gamification",
