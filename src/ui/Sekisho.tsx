@@ -70,6 +70,11 @@ export interface SekishoProps {
    */
   importFile?: (json: unknown) => string | null | Promise<string | null>
   /**
+   * コースの画面の、見出しの下にアプリが足す欄（0.6.2）。
+   * そのコースについての、アプリの案内を出す（「オフラインで使うには、動画を端末に保存」など）
+   */
+  renderCourseNote?: (course: Course) => ReactNode
+  /**
    * 作る画面で、URL（YouTube・Dropbox など）からチェック項目・ご褒美の動画を足せるようにする（0.4.0）。既定は true。
    * false でも、もうある URL の項目・ご褒美は使える
    */
@@ -102,6 +107,7 @@ export function Sekisho(props: SekishoProps) {
     allowExport = true,
     onExport,
     importFile,
+    renderCourseNote,
     allowUrl = true,
     reducedMotion: forceReduced,
     muted = true,
@@ -149,6 +155,7 @@ export function Sekisho(props: SekishoProps) {
     body = (
       <CoursePage
         view={viewCourse(data, current)}
+        note={renderCourseNote?.(current)}
         labels={labels}
         targets={resolvedTargets}
         reducedMotion={reducedMotion}
@@ -349,6 +356,7 @@ function CoursePage({
   labels,
   targets,
   reducedMotion,
+  note,
   onBack,
   onToggle,
   onPlus,
@@ -364,6 +372,7 @@ function CoursePage({
   labels: Labels
   targets: ResolvedTargets
   reducedMotion: boolean
+  note?: ReactNode
   onBack: () => void
   onToggle: (itemId: string) => void
   onPlus: (itemId: string) => void
@@ -413,6 +422,8 @@ function CoursePage({
           {view.complete ? <span className="sk-tag sk-tag--done">{labels.courseCleared}</span> : null}
         </p>
       </header>
+
+      {note ? <div className="sk-course__note">{note}</div> : null}
 
       {view.gates.length > 0 ? (
         <section className="sk-passport" aria-label={labels.passport}>
