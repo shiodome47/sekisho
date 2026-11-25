@@ -182,8 +182,12 @@
 }
 .sekisho .sk-segmented button.is-on {
   background: var(--sk-surface);
-  color: var(--sk-text);
+  color: var(--sk-accent);
+  font-weight: 600;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+.sekisho .sk-segmented button.is-on::before {
+  content: '✓ ';
 }
 
 /* ─── 共通 ─────────────────────────── */
@@ -713,9 +717,8 @@
 }
 .sekisho .sk-gate-editor__number {
   flex: 1;
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 700;
-  color: var(--sk-muted);
 }
 .sekisho .sk-handle {
   appearance: none;
@@ -855,9 +858,142 @@
 .sekisho .sk-add-gate {
   width: 100%;
   padding: 14px;
-  border-style: dashed;
+  border: 1.5px dashed color-mix(in srgb, var(--sk-accent) 55%, transparent);
   background: transparent;
-  color: var(--sk-muted);
+  color: var(--sk-accent);
+  font-weight: 600;
+}
+.sekisho .sk-add-gate:hover {
+  background: color-mix(in srgb, var(--sk-accent) 8%, transparent);
+}
+
+/* 編集の画面（0.6.0） */
+.sekisho .sk-editor__bar {
+  margin-bottom: 14px;
+}
+.sekisho .sk-editor__top {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.sekisho .sk-editor__top > .sk-grow {
+  min-width: 12em;
+}
+.sekisho .sk-editor__heading {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 18px 0 8px;
+}
+.sekisho .sk-optional {
+  margin-left: 6px;
+  font-size: 11px;
+  background: var(--sk-surface-2);
+  border-radius: 4px;
+  padding: 0 5px;
+}
+.sekisho .sk-gate-editor__items-label {
+  margin: 2px 0 -4px;
+}
+.sekisho .sk-btn--accent {
+  background: transparent;
+  border-color: var(--sk-accent);
+  color: var(--sk-accent);
+  font-weight: 600;
+}
+.sekisho .sk-pickers {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.sekisho .sk-pickers .sk-pick {
+  padding: 2px 0;
+}
+.sekisho .sk-pickers .sk-pick + .sk-pick {
+  margin-left: 12px;
+  padding-left: 12px;
+  border-left: 1px solid var(--sk-border);
+  border-radius: 0;
+}
+.sekisho .sk-fold {
+  border: 1px solid var(--sk-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--sk-surface-2) 55%, transparent);
+}
+.sekisho .sk-fold > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 9px 12px;
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.sekisho .sk-fold > summary::-webkit-details-marker {
+  display: none;
+}
+.sekisho .sk-fold > summary::after {
+  content: '';
+  margin-left: auto;
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid var(--sk-muted);
+  border-bottom: 2px solid var(--sk-muted);
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform 0.15s;
+}
+.sekisho .sk-fold[open] > summary::after {
+  transform: rotate(-135deg) translateY(-2px);
+}
+.sekisho .sk-fold__set {
+  margin-left: 6px;
+  font-weight: 400;
+}
+.sekisho .sk-fold__body {
+  padding: 0 12px 12px;
+}
+.sekisho .sk-menu {
+  position: relative;
+  display: inline-flex;
+}
+.sekisho .sk-menu > .sk-icon-btn {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1;
+  padding-bottom: 8px;
+}
+.sekisho .sk-menu__list {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 5;
+  min-width: 11em;
+  display: grid;
+  padding: 4px;
+  background: var(--sk-surface);
+  border: 1px solid var(--sk-border);
+  border-radius: 10px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+}
+.sekisho .sk-menu__list button {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--sk-text);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sekisho .sk-menu__list button:hover {
+  background: var(--sk-surface-2);
+}
+.sekisho .sk-menu__list button.is-danger {
+  color: var(--sk-danger);
 }
 
 @media (max-width: 480px) {

@@ -92,11 +92,38 @@ describe('<Sekisho>', () => {
     expect(screen.getByText('🔁')).toBeInTheDocument()
   })
 
-  it('editor を渡さなければ、作る・直すは出ない', () => {
+  it('onExport を渡すと、書き出しはアプリが受け持つ', () => {
+    const onExport = vi.fn()
+    start(course({ origin: 'own' }), { onExport })
+    fireEvent.click(screen.getByRole('button', { name: '書き出す（配る用）' }))
+    expect(onExport).toHaveBeenCalledWith(expect.objectContaining({ id: 'c1' }))
+  })
+
+  it('importFile が文を返したら、それを出して、部品は取り込まない。null なら部品が取り込む', async () => {
+    const spy = vi.fn()
+    const importFile = vi.fn(async (json: unknown) => ((json as { format?: string }).format === 'app-pack' ? 'パックを取り込みました' : null))
+    const { container } = render(<App initial={{ courses: [], progress: [], clears: [] }} importFile={importFile} spy={spy} />)
+    const pick = async (json: unknown) => {
+      const file = new File([JSON.stringify(json)], 'a.json', { type: 'application/json' })
+      file.text = async () => JSON.stringify(json) // jsdom の File には text() が無い
+      await act(async () => {
+        fireEvent.change(container.querySelector('input[type=file]')!, { target: { files: [file] } })
+        await new Promise((r) => setTimeout(r, 20))
+      })
+    }
+    await pick({ format: 'app-pack', id: 'p', title: 'p' })
+    expect(screen.getByRole('status')).toHaveTextContent('パックを取り込みました')
+    expect(spy).not.toHaveBeenCalled()
+    await pick(course())
+    expect(screen.getByRole('status')).toHaveTextContent('1 個のコースを入れました')
+    expect(spy).toHaveBeenCalledTimes(1)
+  })
+
+  it('editor を渡さなければ、作る・編集は出ない', () => {
     render(<App initial={{ courses: [course({ origin: 'own' })], progress: [], clears: [] }} />)
     expect(screen.queryByRole('button', { name: 'コースを作る' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: /手話の基本/ }))
-    expect(screen.queryByRole('button', { name: '直す' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '編集' })).toBeNull()
   })
 
   it('コースを消すと、一覧にもどる', () => {

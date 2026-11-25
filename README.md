@@ -14,7 +14,7 @@
 | 入り口 | 中身 | 要るもの |
 |---|---|---|
 | `@shiodome47/sekisho` | 画面（`<Sekisho>`・`<Celebration>`）と、土台のすべて | React 18・19 |
-| `@shiodome47/sekisho/editor` | コースを作る・直す画面（`<CourseEditor>`） | React と **linkshelf**（関所のカードを並べる `<CardBoard>`） |
+| `@shiodome47/sekisho/editor` | コースを作る・編集する画面（`<CourseEditor>`） | React と **linkshelf**（関所のカードを並べる `<CardBoard>`） |
 | `@shiodome47/sekisho/core` | 画面なしの土台（計算だけ） | なし |
 | `@shiodome47/sekisho/style.css` | 見た目（`.sekisho` の中だけに効く） | — |
 
@@ -36,24 +36,39 @@ import '@shiodome47/sekisho/style.css'
   }}
   targets={targets} // チェック項目の中身（動画・区間など）の窓口
   rewards={[videoReward]} // ご褒美のコネクタ
-  editor={CourseEditor} // 渡すと「コースを作る」「直す」が出る
+  editor={CourseEditor} // 渡すと「コースを作る」「編集」が出る
 />
 ```
 
 | 設定 | 中身 |
 |---|---|
 | `data` / `onChange` | データと、変わったとき（必須） |
-| `targets` | チェック項目の中身の窓口。`open`（押したら開く）・`renderBadge`（▶ などの印）・`pick`（作る画面で「動画・区間から足す」）・`canOpen` |
+| `targets` | チェック項目の中身の窓口。`open`（押したら開く）・`renderBadge`（▶ などの印）・`pick`（作る画面で「動画・区間から追加」）・`canOpen` |
 | `rewards` | ご褒美のコネクタ（下） |
 | `renderStamp` | スタンプの演出そのものを差し替える（メダル・花丸など） |
 | `editor` | 作る画面。渡さなければ回るだけ |
 | `allowImport` / `allowExport` | 「コースを読み込む」「書き出す（配る用）」を出す（既定は出す） |
+| `onExport` | 「書き出す（配る用）」を、アプリが受け持つ（0.6.0）。コースが指している動画・区間も、いっしょに配りたいときに |
+| `importFile` | 「コースを読み込む」で選んだファイルを、アプリが先に見る（0.6.0）。アプリのファイルなら取り込んで、お知らせの文を返す。コースのファイルなら `null` を返す |
 | `reducedMotion` | 演出を減らす。無ければ端末の設定（視差効果を減らす）に従う |
 | `muted` | 音を出さない（コネクタに渡す。既定は true） |
 | `theme` | `light` / `dark` / `system`（既定） |
 | `labels` | 文言の一部を差し替え。英語は `EN_LABELS` |
 
 色は CSS の変数で変えます: `.sekisho { --sk-accent: #2563eb; }`（ほかに `--sk-surface`・`--sk-text`・`--sk-danger`・`--sk-paper` など）。
+
+### コースを配るとき（チェック項目の中身は、アプリのもの）
+
+「書き出す（配る用）」が作るのは、**コースの JSON だけ**です。チェック項目が指している動画・区間（`target`）は、アプリのデータなので入りません。
+受け取った人の端末に、その動画・区間が無いと、`canOpen` が false になり、項目は開けません（手でチェックはできます）。
+
+中身もいっしょに配りたいアプリは:
+
+- `onExport` で、コースと中身をまとめた、アプリのファイルを書き出す
+- `importFile` で、そのファイルを「コースを読み込む」から取り込めるようにする
+- 中身が無い項目は、`renderBadge` で「この端末にありません」の印を出す
+
+`parseCourses` は、`format` がほかの種類のファイル（アプリのバックアップなど）を、コースとして入れません（0.6.0）。
 
 ### ご褒美のコネクタ（差込口）
 
@@ -91,7 +106,7 @@ YouTube の URL・Dropbox の共有リンク・動画ファイルの URL など�
 
 - チェック項目 `{ "type": "url", "url": "https://…" }`: リンクの印が付き、押すと別のタブで開く
 - ご褒美 `{ "type": "video", "url": "https://…", "title": "…" }`: クリアの演出の中で再生する（YouTube は埋め込み、Dropbox の共有リンクは再生用の形に、ほかは動画として）。「別のタブで開く」も出る
-- 作る画面: 関所のカードに「＋ URL から足す」、ご褒美の欄に「＋ ご褒美の動画を URL で」
+- 作る画面: 関所のカードに「URL から追加」、ご褒美の欄に「＋ ご褒美の動画を URL で」
 - URL は **http(s) だけ**。読み込むとき（`readCourse`・`parseCourses`）に、ほかの URL の項目の中身・ご褒美は落とす
 - 変えたいとき: `targets.openUrl(url, item)`（アプリの中のプレイヤーで見せるなど）、`targets.titleOf(url)`（作る画面で、ページの題名を名前の例に出す）、`allowUrl={false}`（作る画面に URL のボタンを出さない）
 - 印は、アプリの `renderBadge` が何か返せばそちらを使う（`null` を返せば部品の印）

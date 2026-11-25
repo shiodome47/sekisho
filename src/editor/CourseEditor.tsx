@@ -1,5 +1,5 @@
 import { CardBoard, flattenCards, type CardBoardCardState, type CardPlace } from 'linkshelf'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { newGate, newItem } from '../core/course'
 import type { CheckItem, Course, Gate, RewardRef } from '../core/types'
 import { getDomain } from '@shiodome47/video-utils'
@@ -16,7 +16,7 @@ export type { CourseEditorProps }
 const MAX_COUNT = 999
 
 /**
- * コースを作る・直す画面。自分のコースにも、管理者が配るコースにも使う。
+ * コースを作る・編集する画面。自分のコースにも、管理者が配るコースにも使う。
  * 関所はカードにして段組みで並べ、ドラッグで動かす（linkshelf の <CardBoard>）。
  * 保存するまでは、手元の下書きだけを変える
  */
@@ -63,57 +63,85 @@ export function CourseEditor({ course, onSave, onCancel, targets, rewards = [], 
     })
   }
 
+  // 「…」の上へ・下へ: 並びを入れかえて、段組みの場所は並びどおりに付け直す
+  const shiftGate = (gateId: string, by: -1 | 1) =>
+    setGates((gs) => {
+      const from = gs.findIndex((g) => g.id === gateId)
+      const to = from + by
+      if (from < 0 || to < 0 || to >= gs.length) return gs
+      const next = gs.slice()
+      const [x] = next.splice(from, 1)
+      next.splice(to, 0, x)
+      return next.map((g, i) => ({ ...g, board: { order: i } }))
+    })
+
   const route = draft.route ?? 'free'
   return (
     <div className="sk-editor">
-      <div className="sk-toolbar">
-        <button type="button" className="sk-btn sk-btn--ghost" onClick={onCancel}>
-          {labels.cancel}
-        </button>
-        <button type="button" className="sk-btn sk-btn--primary" onClick={save}>
-          {labels.save}
-        </button>
+      <div className="sk-toolbar sk-editor__bar">
+        <h2 className="sk-h2">{course.title ? labels.editorEdit : labels.editorNew}</h2>
+        <div className="sk-toolbar__actions">
+          <button type="button" className="sk-btn" onClick={onCancel}>
+            {labels.cancel}
+          </button>
+          <button type="button" className="sk-btn sk-btn--primary" onClick={save}>
+            {labels.save}
+          </button>
+        </div>
       </div>
 
       <div className="sk-card sk-editor__course">
-        <label className="sk-field">
-          <span className="sk-field__label">{labels.courseTitle}</span>
-          <input className="sk-input" value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} autoFocus={!course.title} />
-        </label>
-        <label className="sk-field">
-          <span className="sk-field__label">{labels.courseDescription}</span>
-          <textarea className="sk-input" rows={2} value={draft.description ?? ''} onChange={(e) => setDraft({ ...draft, description: e.target.value })} />
-        </label>
-        <div className="sk-field">
-          <span className="sk-field__label">{labels.route}</span>
-          <div className="sk-segmented" role="radiogroup" aria-label={labels.route}>
-            {(['free', 'ordered'] as const).map((r) => (
-              <button
-                key={r}
-                type="button"
-                role="radio"
-                aria-checked={route === r}
-                className={route === r ? 'is-on' : ''}
-                onClick={() => setDraft({ ...draft, route: r })}
-              >
-                {r === 'free' ? labels.routeFree : labels.routeOrdered}
-              </button>
-            ))}
+        <div className="sk-editor__top">
+          <label className="sk-field sk-grow">
+            <span className="sk-field__label">{labels.courseTitle}</span>
+            <input
+              className="sk-input"
+              value={draft.title}
+              placeholder={labels.courseTitlePlaceholder}
+              onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+              autoFocus={!course.title}
+            />
+          </label>
+          <div className="sk-field">
+            <span className="sk-field__label">{labels.route}</span>
+            <div className="sk-segmented" role="radiogroup" aria-label={labels.route}>
+              {(['free', 'ordered'] as const).map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  role="radio"
+                  aria-checked={route === r}
+                  className={route === r ? 'is-on' : ''}
+                  onClick={() => setDraft({ ...draft, route: r })}
+                >
+                  {r === 'free' ? labels.routeFree : labels.routeOrdered}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
-        <RewardField
-          reward={draft.reward}
-          messageLabel={labels.courseReward}
-          connectors={rewards}
-          allowUrl={allowUrl}
-          titleOf={titleOf}
-          labels={labels}
-          onChange={(reward) =>
-            setDraft(({ reward: _r, ...d }) => (reward ? { ...d, reward } : (d as Course)))
-          }
-        />
+        <label className="sk-field">
+          <span className="sk-field__label">
+            {labels.courseDescription}
+            <span className="sk-optional">{labels.optional}</span>
+          </span>
+          <textarea className="sk-input" rows={2} value={draft.description ?? ''} onChange={(e) => setDraft({ ...draft, description: e.target.value })} />
+        </label>
+        <Fold summary={labels.courseReward} set={!!draft.reward} labels={labels}>
+          <RewardField
+            reward={draft.reward}
+            messageLabel={labels.rewardMessage}
+            name={labels.courseReward}
+            connectors={rewards}
+            allowUrl={allowUrl}
+            titleOf={titleOf}
+            labels={labels}
+            onChange={(reward) => setDraft(({ reward: _r, ...d }) => (reward ? { ...d, reward } : (d as Course)))}
+          />
+        </Fold>
       </div>
 
+      <h3 className="sk-editor__heading">{labels.gatesHeading}</h3>
       <CardBoard
         cards={cards}
         onMove={onMove}
@@ -121,7 +149,8 @@ export function CourseEditor({ course, onSave, onCancel, targets, rewards = [], 
         gap={12}
         addon={
           <button type="button" className="sk-btn sk-add-gate" onClick={addGate}>
-            ＋ {labels.addGate}
+            <span aria-hidden="true">＋ </span>
+            {labels.addGate}
           </button>
         }
         renderCard={(card, { dragHandle, isDragging }) => {
@@ -131,6 +160,8 @@ export function CourseEditor({ course, onSave, onCancel, targets, rewards = [], 
             <GateEditor
               gate={gate}
               index={index}
+              count={draft.gates.length}
+              onShift={(by) => shiftGate(gate.id, by)}
               color={draft.color}
               labels={labels}
               dragHandle={dragHandle}
@@ -161,6 +192,8 @@ type L = typeof JA_LABELS
 function GateEditor({
   gate,
   index,
+  count,
+  onShift,
   color,
   labels,
   dragHandle,
@@ -176,6 +209,9 @@ function GateEditor({
 }: {
   gate: Gate
   index: number
+  /** 関所の数（「…」の上へ・下へを出すかどうか） */
+  count: number
+  onShift: (by: -1 | 1) => void
   color?: string
   labels: L
   dragHandle: CardBoardCardState['dragHandle']
@@ -217,13 +253,29 @@ function GateEditor({
         <button type="button" className="sk-handle" aria-label={labels.moveGate(gate.title)} {...dragHandle}>
           ⋮⋮
         </button>
+        <Stamp text={s.text} color={s.color} size={44} />
         <span className="sk-gate-editor__number">{labels.gateNumber(index + 1)}</span>
-        <button type="button" className="sk-icon-btn sk-icon-btn--danger" aria-label={labels.removeGate} title={labels.removeGate} onClick={onRemove}>
-          ×
-        </button>
+        <Menu label={labels.gateMenu(gate.title)}>
+          {(close) => (
+            <>
+              {index > 0 ? (
+                <button type="button" role="menuitem" onClick={() => (close(), onShift(-1))}>
+                  {labels.moveGateUp}
+                </button>
+              ) : null}
+              {index < count - 1 ? (
+                <button type="button" role="menuitem" onClick={() => (close(), onShift(1))}>
+                  {labels.moveGateDown}
+                </button>
+              ) : null}
+              <button type="button" role="menuitem" className="is-danger" onClick={() => (close(), onRemove())}>
+                {labels.removeGate}
+              </button>
+            </>
+          )}
+        </Menu>
       </div>
       <div className="sk-gate-editor__title">
-        <Stamp text={s.text} color={s.color} size={44} />
         <label className="sk-field sk-grow">
           <span className="sk-field__label">{labels.gateTitle}</span>
           <input className="sk-input" value={gate.title} onChange={(e) => onChange((g) => ({ ...g, title: e.target.value }))} />
@@ -241,6 +293,7 @@ function GateEditor({
         </label>
       </div>
 
+      <p className="sk-field__label sk-gate-editor__items-label">{labels.itemsHeading}</p>
       <ul className="sk-edit-items">
         {gate.items.map((item, i) => (
           <li key={item.id} className="sk-edit-item">
@@ -290,21 +343,23 @@ function GateEditor({
           addText()
         }}
       >
-        <input className="sk-input sk-grow" aria-label={labels.addItem} placeholder={labels.addItemPlaceholder} value={text} onChange={(e) => setText(e.target.value)} />
-        <button type="submit" className="sk-btn" disabled={!text.trim()}>
+        <input className="sk-input sk-grow" aria-label={labels.addItemInput} placeholder={labels.addItemPlaceholder} value={text} onChange={(e) => setText(e.target.value)} />
+        <button type="submit" className="sk-btn sk-btn--accent" disabled={!text.trim()}>
           {labels.addItem}
         </button>
       </form>
       {canPick || allowUrl ? (
-        <div className="sk-reward-field__pickers">
+        <div className="sk-pickers">
           {canPick ? (
             <button type="button" className="sk-btn sk-btn--ghost sk-pick" onClick={onPick}>
-              ＋ {labels.pickTarget}
+              <span aria-hidden="true">📹 </span>
+              {labels.pickTarget}
             </button>
           ) : null}
           {allowUrl && !addingUrl ? (
             <button type="button" className="sk-btn sk-btn--ghost sk-pick" onClick={() => setAddingUrl(true)}>
-              ＋ {labels.addUrl}
+              <span aria-hidden="true">🔗 </span>
+              {labels.addUrl}
             </button>
           ) : null}
         </div>
@@ -321,16 +376,67 @@ function GateEditor({
         />
       ) : null}
 
-      <RewardField
-        reward={gate.reward}
-        messageLabel={labels.rewardMessage}
-        connectors={rewards}
-        allowUrl={allowUrl}
-        titleOf={titleOf}
-        labels={labels}
-        onChange={(reward) => onChange(({ reward: _r, ...g }) => (reward ? { ...g, reward } : g))}
-      />
+      <Fold summary={labels.gateReward} set={!!gate.reward} labels={labels}>
+        <RewardField
+          reward={gate.reward}
+          messageLabel={labels.rewardMessage}
+          name={labels.gateReward}
+          connectors={rewards}
+          allowUrl={allowUrl}
+          titleOf={titleOf}
+          labels={labels}
+          onChange={(reward) => onChange(({ reward: _r, ...g }) => (reward ? { ...g, reward } : g))}
+        />
+      </Fold>
     </section>
+  )
+}
+
+/** 折りたたむ欄（ご褒美）。もう決めてあるときは、はじめから開いておく */
+function Fold({ summary, set, labels, children }: { summary: string; set: boolean; labels: L; children: ReactNode }) {
+  const [initiallyOpen] = useState(set)
+  return (
+    <details className="sk-fold" open={initiallyOpen}>
+      <summary>
+        <span aria-hidden="true">🎁 </span>
+        {summary}
+        {set ? <span className="sk-tag sk-fold__set">{labels.rewardSet}</span> : null}
+      </summary>
+      <div className="sk-fold__body">{children}</div>
+    </details>
+  )
+}
+
+/** 「…」のメニュー。外を押す・Esc で閉じる */
+function Menu({ label, children }: { label: string; children: (close: () => void) => ReactNode }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLSpanElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const down = (e: PointerEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false)
+    }
+    const key = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('pointerdown', down)
+    document.addEventListener('keydown', key)
+    return () => {
+      document.removeEventListener('pointerdown', down)
+      document.removeEventListener('keydown', key)
+    }
+  }, [open])
+  return (
+    <span className="sk-menu" ref={ref}>
+      <button type="button" className="sk-icon-btn" aria-label={label} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        <span aria-hidden="true">…</span>
+      </button>
+      {open ? (
+        <span className="sk-menu__list" role="menu">
+          {children(() => setOpen(false))}
+        </span>
+      ) : null}
+    </span>
   )
 }
 
@@ -341,6 +447,7 @@ function GateEditor({
 function RewardField({
   reward,
   messageLabel,
+  name,
   connectors,
   allowUrl,
   titleOf,
@@ -349,6 +456,8 @@ function RewardField({
 }: {
   reward?: RewardRef
   messageLabel: string
+  /** どのご褒美か（読み上げ用。「この関所のご褒美」など） */
+  name: string
   connectors: RewardConnector[]
   allowUrl: boolean
   titleOf?: (url: string) => Promise<string | null>
@@ -418,10 +527,14 @@ function RewardField({
   return (
     <div className="sk-reward-field">
       <label className="sk-field">
-        <span className="sk-field__label">{messageLabel}</span>
+        <span className="sk-field__label">
+          {messageLabel}
+          <span className="sk-optional">{labels.optional}</span>
+        </span>
         <textarea
           className="sk-input"
           rows={2}
+          aria-label={`${name}: ${messageLabel}`}
           value={message}
           onChange={(e) => onChange(e.target.value ? { type: 'message', text: e.target.value } : undefined)}
         />

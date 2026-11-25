@@ -166,6 +166,9 @@ export function parseCourses(input: unknown, now: Date): { courses: Course[]; er
     list = Array.isArray(input.courses) ? input.courses : []
   } else if (Array.isArray(input)) {
     list = input
+  } else if (isObj(input) && typeof input.format === 'string') {
+    // ほかの種類のファイル（アプリのバックアップ・配布用のまとまりなど）を、コースとして入れない
+    return { courses: [], errors: ['コースのファイルではありません'] }
   } else if (isObj(input)) {
     list = [input]
   } else {
