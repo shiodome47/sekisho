@@ -76,6 +76,12 @@ describe('書き出す・読む', () => {
     expect(parseCourses('hello', T1).errors).toHaveLength(1)
   })
 
+  it('ほかの種類のファイル（format が違うもの）は、コースとして入れない', () => {
+    const r = parseCourses({ format: 'shuwa-pack', version: 1, id: 'p1', title: 'パック', data: {} }, T1)
+    expect(r.courses).toEqual([])
+    expect(r.errors).toEqual(['コースのファイルではありません'])
+  })
+
   it('知らない項目は残す（新しい版のアプリが足したもの）', () => {
     const { courses } = parseCourses({ ...course(), theme: 'sakura' }, T1)
     expect((courses[0] as unknown as Record<string, unknown>).theme).toBe('sakura')

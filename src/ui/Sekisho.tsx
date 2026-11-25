@@ -22,7 +22,7 @@ import { resolveTargets, type ResolvedTargets } from './urlParts'
 import { JA_LABELS, type Labels } from './labels'
 import { Stamp, useReducedMotion } from './Stamp'
 
-/** コースを作る・直す画面（@shiodome47/sekisho/editor の CourseEditor）に渡すもの */
+/** コースを作る・編集する画面（@shiodome47/sekisho/editor の CourseEditor）に渡すもの */
 export interface CourseEditorProps {
   course: Course
   /** 保存したとき（直したコースが届く） */
@@ -51,13 +51,24 @@ export interface SekishoProps {
   renderStamp?: (props: StampRenderProps) => ReactNode
   /**
    * コースを作る・直す画面（import { CourseEditor } from '@shiodome47/sekisho/editor'）。
-   * 渡すと「コースを作る」「直す」が出る。渡さなければ、回るだけ
+   * 渡すと「コースを作る」「編集」が出る。渡さなければ、回るだけ
    */
   editor?: ComponentType<CourseEditorProps>
   /** 「コースを読み込む」（JSON のファイル）を出す。既定は true */
   allowImport?: boolean
   /** 「書き出す（配る用）」を出す。既定は true */
   allowExport?: boolean
+  /**
+   * 「書き出す（配る用）」を押したときに、アプリが書き出す（0.6.0）。
+   * コースが指している動画・区間などを、いっしょに配りたいアプリが使う。渡さなければ、部品がコースの JSON を保存させる
+   */
+  onExport?: (course: Course) => void
+  /**
+   * 「コースを読み込む」で選んだファイルを、アプリが先に見る（0.6.0）。
+   * アプリが受け持つファイル（アプリの配布用のまとまりなど）なら、取り込んで、お知らせの文を返す。
+   * コースのファイルなら null を返す（部品がいつもどおり取り込む）
+   */
+  importFile?: (json: unknown) => string | null | Promise<string | null>
   /**
    * 作る画面で、URL（YouTube・Dropbox など）からチェック項目・ご褒美の動画を足せるようにする（0.4.0）。既定は true。
    * false でも、もうある URL の項目・ご褒美は使える
@@ -89,6 +100,8 @@ export function Sekisho(props: SekishoProps) {
     editor: Editor,
     allowImport = true,
     allowExport = true,
+    onExport,
+    importFile,
     allowUrl = true,
     reducedMotion: forceReduced,
     muted = true,
@@ -153,7 +166,7 @@ export function Sekisho(props: SekishoProps) {
               }
             : undefined
         }
-        onExport={allowExport ? () => download(current) : undefined}
+        onExport={allowExport ? () => (onExport ? onExport(current) : download(current)) : undefined}
         onNextLap={() => {
           if (!window.confirm(labels.nextLapConfirm(viewCourse(data, current).lap))) return
           change(nextLap(data, current.id, now()))
@@ -182,7 +195,16 @@ export function Sekisho(props: SekishoProps) {
         onCreate={Editor ? () => setScreen({ kind: 'edit', course: newCourse({ title: '' }, now()), isNew: true }) : undefined}
         onImport={
           allowImport
-            ? (json) => {
+            ? async (json) => {
+                if (importFile && json !== null) {
+                  let handled: string | null
+                  try {
+                    handled = await importFile(json)
+                  } catch (e) {
+                    handled = e instanceof Error && e.message ? e.message : labels.importFailed
+                  }
+                  if (handled !== null) return setNotice(handled)
+                }
                 const { courses, errors } = parseCourses(json, now())
                 const r = importCourses(data, courses, now())
                 change(r.changes)
