@@ -92,6 +92,11 @@ describe('<Sekisho>', () => {
     expect(screen.getByText('🔁')).toBeInTheDocument()
   })
 
+  it('renderCourseNote: コースの画面に、アプリの案内を出す', () => {
+    start(course(), { renderCourseNote: (c) => <p>「{c.title}」の案内</p> })
+    expect(screen.getByText('「手話の基本」の案内')).toBeInTheDocument()
+  })
+
   it('onExport を渡すと、書き出しはアプリが受け持つ', () => {
     const onExport = vi.fn()
     start(course({ origin: 'own' }), { onExport })

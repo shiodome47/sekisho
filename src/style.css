@@ -320,6 +320,9 @@
   color: var(--sk-muted);
   margin: 6px 0 0;
 }
+.sekisho .sk-course__note {
+  margin: 0 0 12px;
+}
 .sekisho .sk-passport {
   background: var(--sk-paper);
   border: 1px solid var(--sk-paper-line);
