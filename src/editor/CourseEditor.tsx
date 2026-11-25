@@ -282,13 +282,10 @@ function GateEditor({
         </label>
         <label className="sk-field sk-field--narrow">
           <span className="sk-field__label">{labels.stampText}</span>
-          <input
-            className="sk-input"
+          <StampTextInput
             value={gate.stamp?.text ?? ''}
             placeholder={[...gate.title.trim()][0] ?? ''}
-            title="1〜2 文字"
-            maxLength={4}
-            onChange={(e) => onChange((g) => ({ ...g, stamp: { ...g.stamp, text: [...e.target.value].slice(0, 2).join('') } }))}
+            onChange={(text) => onChange((g) => ({ ...g, stamp: { ...g.stamp, text } }))}
           />
         </label>
       </div>
@@ -389,6 +386,29 @@ function GateEditor({
         />
       </Fold>
     </section>
+  )
+}
+
+/**
+ * スタンプの字（1〜2 文字）。
+ * かなから漢字に変換している間（「きわめて」→「極」）は、文字数で切らない。変換が決まってから 2 文字にする
+ */
+function StampTextInput({ value, placeholder, onChange }: { value: string; placeholder: string; onChange: (text: string) => void }) {
+  const [composing, setComposing] = useState<string | null>(null)
+  const cut = (v: string) => [...v].slice(0, 2).join('')
+  return (
+    <input
+      className="sk-input"
+      value={composing ?? value}
+      placeholder={placeholder}
+      title="1〜2 文字"
+      onCompositionStart={(e) => setComposing(e.currentTarget.value)}
+      onChange={(e) => (composing !== null ? setComposing(e.target.value) : onChange(cut(e.target.value)))}
+      onCompositionEnd={(e) => {
+        setComposing(null)
+        onChange(cut(e.currentTarget.value))
+      }}
+    />
   )
 }
 
