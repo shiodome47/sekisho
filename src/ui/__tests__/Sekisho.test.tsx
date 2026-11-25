@@ -92,6 +92,20 @@ describe('<Sekisho>', () => {
     expect(screen.getByText('🔁')).toBeInTheDocument()
   })
 
+  it('initialCourseId: はじめから、そのコースの画面を開く。無いコースなら一覧。見ているコースを onCourseChange で知らせる', () => {
+    const onCourseChange = vi.fn()
+    const { unmount } = render(<App initial={{ courses: [course()], progress: [], clears: [] }} reducedMotion initialCourseId="c1" onCourseChange={onCourseChange} />)
+    expect(screen.getByRole('heading', { name: '手話の基本' })).toBeInTheDocument()
+    expect(onCourseChange).toHaveBeenLastCalledWith('c1')
+    fireEvent.click(screen.getByRole('button', { name: /もどる/ }))
+    expect(onCourseChange).toHaveBeenLastCalledWith(null)
+    fireEvent.click(screen.getByRole('button', { name: /手話の基本/ }))
+    expect(onCourseChange).toHaveBeenLastCalledWith('c1')
+    unmount()
+    render(<App initial={{ courses: [course()], progress: [], clears: [] }} reducedMotion initialCourseId="none" />)
+    expect(screen.getByRole('heading', { name: 'コース' })).toBeInTheDocument()
+  })
+
   it('renderCourseNote: コースの画面に、アプリの案内を出す', () => {
     start(course(), { renderCourseNote: (c) => <p>「{c.title}」の案内</p> })
     expect(screen.getByText('「手話の基本」の案内')).toBeInTheDocument()

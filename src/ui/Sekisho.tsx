@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { duplicateCourse, newCourse } from '../core/course'
 import { exportCourses, importCourses, parseCourses } from '../core/io'
 import {
@@ -75,6 +75,13 @@ export interface SekishoProps {
    */
   renderCourseNote?: (course: Course) => ReactNode
   /**
+   * はじめに開いておくコース（0.6.3）。アプリがほかの画面へ行って戻ってきたときに、見ていたコースの画面から始める。
+   * そのコースが無ければ、コースの一覧
+   */
+  initialCourseId?: string
+  /** 見ているコースが変わったとき（0.6.3）。コースの一覧のときは null。initialCourseId に渡すために、アプリが覚えておく */
+  onCourseChange?: (courseId: string | null) => void
+  /**
    * 作る画面で、URL（YouTube・Dropbox など）からチェック項目・ご褒美の動画を足せるようにする（0.4.0）。既定は true。
    * false でも、もうある URL の項目・ご褒美は使える
    */
@@ -108,6 +115,8 @@ export function Sekisho(props: SekishoProps) {
     onExport,
     importFile,
     renderCourseNote,
+    initialCourseId,
+    onCourseChange,
     allowUrl = true,
     reducedMotion: forceReduced,
     muted = true,
@@ -119,7 +128,16 @@ export function Sekisho(props: SekishoProps) {
   // URL のチェック項目は部品が受け持つ（アプリの窓口に足す）
   const resolvedTargets = useMemo(() => resolveTargets(targets, labels), [targets, labels])
   const reducedMotion = useReducedMotion(forceReduced)
-  const [screen, setScreen] = useState<Screen>({ kind: 'list' })
+  const [screen, setScreen] = useState<Screen>(() =>
+    initialCourseId && data.courses.some((c) => c.id === initialCourseId) ? { kind: 'course', id: initialCourseId } : { kind: 'list' },
+  )
+  // 見ているコースを、アプリに知らせる（作る・編集する画面のあいだは、そのコース。新しく作っているときは一覧）
+  const shownCourseId = screen.kind === 'course' ? screen.id : screen.kind === 'edit' && !screen.isNew ? screen.course.id : null
+  const onCourseChangeRef = useRef(onCourseChange)
+  onCourseChangeRef.current = onCourseChange
+  useEffect(() => {
+    onCourseChangeRef.current?.(shownCourseId)
+  }, [shownCourseId])
   const [events, setEvents] = useState<ClearEvent[]>([])
   const [notice, setNotice] = useState('')
 
